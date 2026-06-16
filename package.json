@@ -1,0 +1,20 @@
+{
+  "name": "training-signup-bot",
+  "version": "1.0.0",
+  "description": "WhatsApp training signup bot for Monday and Friday sessions",
+  "main": "api/whatsapp.ts",
+  "scripts": {
+    "build": "tsc",
+    "start": "node lib/bot.js",
+    "dev": "vercel dev"
+  },
+  "dependencies": {
+    "twilio": "^4.10.0",
+    "dotenv": "^16.3.1",
+    "@vercel/node": "^3.0.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.2.2",
+    "@types/node": "^20.5.0"
+  }
+}
