@@ -28,5 +28,20 @@ export async function GET(request: Request) {
     return NextResponse.redirect(`${origin}/sign-in?error=1`)
   }
 
-  return NextResponse.redirect(data.url)
+  // The internal sign-in/social call sets the OAuth challenge cookie
+  // (e.g. __Secure-neon-auth.session_challange) needed to validate the
+  // callback. We must forward those Set-Cookie headers onto the redirect,
+  // otherwise the browser never stores them and the Google callback fails.
+  const response = NextResponse.redirect(data.url)
+  const setCookie = res.headers.getSetCookie?.() ?? []
+  for (const cookie of setCookie) {
+    response.headers.append("set-cookie", cookie)
+  }
+  // Fallback for runtimes without getSetCookie()
+  if (setCookie.length === 0) {
+    const single = res.headers.get("set-cookie")
+    if (single) response.headers.append("set-cookie", single)
+  }
+
+  return response
 }
