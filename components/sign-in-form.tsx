@@ -1,7 +1,6 @@
 "use client"
 
 import { useState } from "react"
-import { signIn } from "@/lib/auth/client"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Waves } from "lucide-react"
@@ -14,23 +13,33 @@ export function SignInForm() {
     setLoading(true)
     setError(null)
     try {
-      const result = await signIn.social({
-        provider: "google",
-        callbackURL: "/",
+      // Ask the auth backend for the Google provider URL. The SDK does not
+      // reliably redirect inside the v0 preview iframe, so we fetch the URL
+      // and navigate to it ourselves.
+      const res = await fetch(`${window.location.origin}/api/auth/sign-in/social`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ provider: "google", callbackURL: `${window.location.origin}/` }),
       })
 
-      // The SDK returns the provider URL but does not always auto-redirect
-      // (e.g. inside the v0 preview iframe), so redirect manually.
-      const url = (result as { data?: { url?: string } })?.data?.url
-      if (url) {
-        window.location.href = url
-        return
-      }
+      if (!res.ok) throw new Error(`sign-in failed: ${res.status}`)
 
-      const errored = (result as { error?: unknown })?.error
-      if (errored) {
-        setError("Anmeldung fehlgeschlagen. Bitte erneut versuchen.")
-        setLoading(false)
+      const data = (await res.json()) as { url?: string }
+      if (!data?.url) throw new Error("no redirect url returned")
+
+      // Google refuses to render inside an iframe. If we are embedded (e.g. the
+      // v0 preview), break out to the top-level window; if that is blocked by
+      // cross-origin rules, open the consent screen in a new tab instead.
+      const embedded = window.self !== window.top
+      if (embedded) {
+        try {
+          window.top!.location.href = data.url
+        } catch {
+          window.open(data.url, "_blank", "noopener,noreferrer")
+          setLoading(false)
+        }
+      } else {
+        window.location.href = data.url
       }
     } catch {
       setError("Anmeldung fehlgeschlagen. Bitte erneut versuchen.")
