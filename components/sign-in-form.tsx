@@ -1,29 +1,8 @@
-"use client"
-
-import { useState } from "react"
-import { signIn } from "@/lib/auth/client"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Waves } from "lucide-react"
 
-export function SignInForm() {
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  async function handleGoogle() {
-    setLoading(true)
-    setError(null)
-    try {
-      await signIn.social({
-        provider: "google",
-        callbackURL: "/",
-      })
-    } catch {
-      setError("Anmeldung fehlgeschlagen. Bitte erneut versuchen.")
-      setLoading(false)
-    }
-  }
-
+export function SignInForm({ hasError = false }: { hasError?: boolean }) {
   return (
     <Card className="w-full max-w-sm">
       <CardHeader className="items-center text-center">
@@ -34,13 +13,25 @@ export function SignInForm() {
         <CardDescription>Melde dich an, um Trainings und Teams zu sehen.</CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
-        <Button onClick={handleGoogle} disabled={loading} className="w-full" size="lg">
-          <GoogleMark />
-          {loading ? "Wird angemeldet…" : "Mit Google anmelden"}
+        {/*
+          A plain link is a real user gesture, so target="_blank" is allowed by
+          popup blockers. We open in a new tab because Google's sign-in page
+          refuses to render inside the v0 preview iframe. The /api/auth/google
+          route 302-redirects to the Google consent screen; after sign-in the
+          user is returned to "/" and can come back to this tab.
+        */}
+        <Button asChild className="w-full" size="lg">
+          <a href="/api/auth/google" target="_blank" rel="noopener noreferrer">
+            <GoogleMark />
+            Mit Google anmelden
+          </a>
         </Button>
-        {error && (
+        <p className="text-center text-xs text-muted-foreground">
+          Die Anmeldung öffnet sich in einem neuen Tab.
+        </p>
+        {hasError && (
           <p role="alert" className="text-center text-sm text-destructive">
-            {error}
+            Anmeldung fehlgeschlagen. Bitte erneut versuchen.
           </p>
         )}
       </CardContent>
