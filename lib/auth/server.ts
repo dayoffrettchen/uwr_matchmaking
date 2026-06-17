@@ -23,6 +23,13 @@ export const auth = createNeonAuth({
   baseUrl: process.env.NEON_AUTH_BASE_URL!,
   cookies: {
     secret: cookieSecret(),
+    // Neon Auth cookies default to SameSite=Strict. The Google OAuth callback
+    // is a cross-site, top-level navigation, and the app also renders inside a
+    // cross-site preview iframe — in both cases the browser drops Strict cookies,
+    // so the short-lived OAuth challenge cookie never comes back and sign-in
+    // fails. "none" (always Secure) lets the challenge + session cookies survive
+    // the cross-site round-trip.
+    sameSite: "none",
   },
 })
 
