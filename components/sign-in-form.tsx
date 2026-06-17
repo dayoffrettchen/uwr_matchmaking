@@ -14,10 +14,24 @@ export function SignInForm() {
     setLoading(true)
     setError(null)
     try {
-      await signIn.social({
+      const result = await signIn.social({
         provider: "google",
         callbackURL: "/",
       })
+
+      // The SDK returns the provider URL but does not always auto-redirect
+      // (e.g. inside the v0 preview iframe), so redirect manually.
+      const url = (result as { data?: { url?: string } })?.data?.url
+      if (url) {
+        window.location.href = url
+        return
+      }
+
+      const errored = (result as { error?: unknown })?.error
+      if (errored) {
+        setError("Anmeldung fehlgeschlagen. Bitte erneut versuchen.")
+        setLoading(false)
+      }
     } catch {
       setError("Anmeldung fehlgeschlagen. Bitte erneut versuchen.")
       setLoading(false)
