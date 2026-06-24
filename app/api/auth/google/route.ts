@@ -1,32 +1,33 @@
 import { NextResponse } from "next/server"
+import { auth } from "@/lib/auth/server"
 
 export const dynamic = "force-dynamic"
 
 /**
  * Server-side Google sign-in kickoff.
  *
- * A plain <a href> to this route is a real user gesture and, with target="_top",
- * breaks out of the v0 preview iframe natively. This route asks Neon Auth for the
- * provider URL and issues a 302 redirect to it, avoiding client-side popup/redirect
- * logic that the browser blocks inside cross-origin iframes.
+ * Calls the Neon Auth SDK directly (no HTTP self-fetch) to get the Google
+ * provider URL, then 302-redirects the browser to it. Self-fetching the app's
+ * own origin fails inside the preview because the external HTTPS host loops
+ * back to the plain-HTTP dev server (ERR_SSL_PACKET_LENGTH_TOO_LONG).
  */
 export async function GET(request: Request) {
   const origin = new URL(request.url).origin
 
-  const res = await fetch(`${origin}/api/auth/sign-in/social`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ provider: "google", callbackURL: `${origin}/` }),
-  })
+  try {
+    const { data, error } = await auth.signIn.social({
+      provider: "google",
+      callbackURL: `${origin}/`,
+      newUserCallbackURL: `${origin}/`,
+      errorCallbackURL: `${origin}/sign-in?error=1`,
+    })
 
-  if (!res.ok) {
+    if (error || !data?.url) {
+      return NextResponse.redirect(`${origin}/sign-in?error=1`)
+    }
+
+    return NextResponse.redirect(data.url)
+  } catch {
     return NextResponse.redirect(`${origin}/sign-in?error=1`)
   }
-
-  const data = (await res.json()) as { url?: string }
-  if (!data?.url) {
-    return NextResponse.redirect(`${origin}/sign-in?error=1`)
-  }
-
-  return NextResponse.redirect(data.url)
 }

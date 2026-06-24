@@ -20,11 +20,13 @@ export function SignInForm({ hasError = false }: { hasError?: boolean }) {
           route 302-redirects to the Google consent screen; after sign-in the
           user is returned to "/" and can come back to this tab.
         */}
-        <Button asChild className="w-full" size="lg">
-          <a href="/api/auth/google" target="_blank" rel="noopener noreferrer">
-            <GoogleMark />
-            Mit Google anmelden
-          </a>
+        <Button
+          render={<a href="/api/auth/google" target="_blank" rel="noopener noreferrer" />}
+          className="w-full"
+          size="lg"
+        >
+          <GoogleMark />
+          Mit Google anmelden
         </Button>
         <p className="text-center text-xs text-muted-foreground">
           Die Anmeldung öffnet sich in einem neuen Tab.
