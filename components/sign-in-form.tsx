@@ -35,7 +35,6 @@ export function SignInForm({
       const result = await authClient.signIn.social({
         provider: "google",
         callbackURL: "/",
-        prompt: "select_account",
       })
 
       if (result?.error) {

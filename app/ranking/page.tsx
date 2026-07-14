@@ -10,6 +10,7 @@ import { PLAYER_POSITIONS, POSITION_LABELS } from "@/lib/ratings/types"
 export const dynamic = "force-dynamic"
 
 export default async function RankingPage() {
+  const locale = await getLocale()
   const user = await getSessionUser(); if (!user) redirect("/sign-in")
   if (user.role !== "organizer") redirect("/")
   await ensureDatabaseSchema()
