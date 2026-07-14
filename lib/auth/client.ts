@@ -1,19 +1,8 @@
 // lib/auth/client.ts
 "use client"
 
-import { createAuthClient } from "@neondatabase/auth"
-import { BetterAuthReactAdapter } from "@neondatabase/auth/react"
+import { createAuthClient } from "@neondatabase/auth/next"
 
-function getAuthBaseUrl() {
-  if (typeof window === "undefined") {
-    return "http://localhost/api/auth"
-  }
-
-  return new URL("/api/auth", window.location.origin).toString()
-}
-
-export const authClient = createAuthClient(getAuthBaseUrl(), {
-  adapter: BetterAuthReactAdapter(),
-})
+export const authClient = createAuthClient()
 
 export const { signIn, signOut, useSession } = authClient
