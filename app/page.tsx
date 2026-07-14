@@ -21,6 +21,19 @@ const TEAM_LABELS = {
   2: "Team Weiß",
 } as const
 
+const ASSIGNMENT_CARD_STYLES = {
+  1: {
+    card: "border-primary/40 bg-primary/10",
+    icon: "bg-primary text-primary-foreground",
+    team: "text-primary",
+  },
+  2: {
+    card: "border-team-white-border bg-team-white",
+    icon: "border border-team-white-border bg-team-white text-team-white-foreground",
+    team: "text-team-white-foreground",
+  },
+} as const
+
 function isPlayerPosition(position: string | null | undefined): position is PlayerPosition {
   return position === "goalkeeper" || position === "defender" || position === "forward"
 }
@@ -50,6 +63,7 @@ export default async function Page() {
     ? roster.find((player) => player.playerId === currentPlayer.id && (player.team === 1 || player.team === 2))
     : null
   const assignmentTeamLabel = currentAssignment?.team === 1 || currentAssignment?.team === 2 ? TEAM_LABELS[currentAssignment.team] : null
+  const assignmentStyles = currentAssignment?.team === 1 || currentAssignment?.team === 2 ? ASSIGNMENT_CARD_STYLES[currentAssignment.team] : null
   const assignmentPositionLabel = isPlayerPosition(currentAssignment?.assignedPosition) ? POSITION_LABELS[currentAssignment.assignedPosition] : null
   const assignmentLineupLabel = currentAssignment
     ? (currentAssignment.startsInWater ?? currentAssignment.lineupType !== "substitute")
@@ -111,17 +125,18 @@ export default async function Page() {
       )}
 
 
-      {currentAssignment && assignmentTeamLabel && (
-        <Card className="border-primary/30 bg-primary/10">
+      {currentAssignment && assignmentTeamLabel && assignmentStyles && (
+        <Card className={assignmentStyles.card}>
           <CardContent className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-3">
-              <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground">
+              <div className={`flex size-10 shrink-0 items-center justify-center rounded-full ${assignmentStyles.icon}`}>
                 <UserRoundCheck className="size-5" aria-hidden />
               </div>
               <div>
                 <p className="text-sm font-medium text-muted-foreground">{t.assignmentTitle}</p>
                 <p className="text-lg font-semibold text-foreground">
-                  {t.assignmentIntro} {assignmentTeamLabel}.
+                  {t.assignmentIntro}{" "}
+                  <span className={assignmentStyles.team}>{assignmentTeamLabel}</span>.
                 </p>
               </div>
             </div>
