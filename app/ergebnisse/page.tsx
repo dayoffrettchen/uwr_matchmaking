@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation"
+import { getLocale } from "@/lib/i18n-server"
 import { desc, eq, inArray, sql } from "drizzle-orm"
 import { CheckCircle2, ClipboardCheck, ClipboardList, ShieldCheck, Trophy } from "lucide-react"
 import { AppNavigation } from "@/components/app-navigation"
@@ -69,6 +70,7 @@ function getMatchDuties(playersForMatch: MatchPlayerRow[], matchId: number) {
 }
 
 export default async function ErgebnissePage() {
+  const locale = await getLocale()
   const user = await getSessionUser()
   if (!user) redirect("/sign-in")
 
@@ -142,7 +144,7 @@ export default async function ErgebnissePage() {
 
   return (
     <main className="mx-auto flex min-h-screen max-w-5xl flex-col gap-6 px-4 py-8">
-      <AppNavigation role={user.role} />
+      <AppNavigation role={user.role} locale={locale} />
       <div>
         <h1 className="text-2xl font-bold">Ergebnisse</h1>
         <p className="text-muted-foreground">

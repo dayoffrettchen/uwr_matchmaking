@@ -9,22 +9,24 @@ import { SelfServiceTrainingActions } from "@/components/self-service-training-a
 import { getTrainingEndAt } from "@/lib/training/schedule"
 import { CalendarDays, Clock, MapPin, Waves } from "lucide-react"
 import { redirect } from "next/navigation"
+import { getLocale } from "@/lib/i18n-server"
 
 export const dynamic = "force-dynamic"
 
 const TRAINING_START_TIME = "19:00"
 
-function formatTrainingDate(scheduledAt: Date) {
-  const date = new Date(scheduledAt).toLocaleDateString("de-DE", {
+function formatTrainingDate(scheduledAt: Date, locale: "de" | "en") {
+  const date = new Date(scheduledAt).toLocaleDateString(locale === "de" ? "de-DE" : "en-US", {
     weekday: "long",
     day: "2-digit",
     month: "long",
   })
 
-  return `${date} um ${TRAINING_START_TIME}`
+  return locale === "de" ? `${date} um ${TRAINING_START_TIME}` : `${date} at ${TRAINING_START_TIME}`
 }
 
 export default async function Page() {
+  const locale = await getLocale()
   const { user, training, roster, quickAddPlayers, recentMessages, currentPlayer } = await getDashboardData()
 
   if (!user) redirect("/sign-in")
@@ -33,7 +35,8 @@ export default async function Page() {
   if (user.role === "player" && currentPlayer && !currentPlayer.profileCompleted) redirect("/profil")
 
   const trainingIsPast = training ? getTrainingEndAt(new Date(training.scheduledAt)).getTime() < Date.now() : false
-  const dateLabel = training ? formatTrainingDate(training.scheduledAt) : null
+  const dateLabel = training ? formatTrainingDate(training.scheduledAt, locale) : null
+  const t = locale === "de" ? { subtitle: "Unterwasserrugby Training", schedule: "Montag 19:00–20:00 · Freitag 19:00–21:00", past: "Vergangenes Training", deadline: "Anmeldung offiziell bis 15:00, inoffiziell bis 16:00 · Einteilung jederzeit möglich", noTraining: "Aktuell ist kein Training zur Anmeldung geöffnet." } : { subtitle: "Underwater rugby training", schedule: "Monday 19:00–20:00 · Friday 19:00–21:00", past: "Past training", deadline: "Official signup until 15:00, unofficially until 16:00 · Teams can be assigned anytime", noTraining: "No training is currently open for signup." }
 
   return (
     <main className="mx-auto flex min-h-screen max-w-5xl flex-col gap-6 px-4 py-8">
@@ -44,12 +47,12 @@ export default async function Page() {
           </div>
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-balance">UWR Matchmaking</h1>
-            <p className="text-sm text-muted-foreground">Unterwasserrugby Training</p>
+            <p className="text-sm text-muted-foreground">{t.subtitle}</p>
           </div>
         </div>
-        <UserMenu name={user.name} email={user.email} role={user.role} />
+        <UserMenu name={user.name} email={user.email} role={user.role} locale={locale} />
       </header>
-      <AppNavigation role={user.role} />
+      <AppNavigation role={user.role} locale={locale} />
 
       {training ? (
         <Card className="bg-primary text-primary-foreground">
@@ -67,28 +70,29 @@ export default async function Page() {
             )}
             <span className="flex items-center gap-1.5 text-sm opacity-90">
               <Clock className="size-4" aria-hidden />
-              Montag 19:00–20:00 · Freitag 19:00–21:00
+              {t.schedule}
             </span>
             {trainingIsPast && (
               <span className="rounded-full bg-primary-foreground/15 px-2 py-0.5 text-xs font-medium">
-                Vergangenes Training
+                {t.past}
               </span>
             )}
             <span className="rounded-full bg-primary-foreground/15 px-2 py-0.5 text-xs font-medium">
-              Anmeldung offiziell bis 15:00, inoffiziell bis 16:00 · Einteilung jederzeit möglich
+              {t.deadline}
             </span>
           </CardContent>
         </Card>
       ) : (
         <Card>
           <CardContent className="py-6 text-center text-muted-foreground">
-            Aktuell ist kein Training zur Anmeldung geöffnet.
+            {t.noTraining}
           </CardContent>
         </Card>
       )}
 
       {training && user.role === "player" && currentPlayer && (
         <SelfServiceTrainingActions
+          locale={locale}
           trainingId={training.id}
           isOpen={training.isOpen}
           isSignedUp={roster.some((player) => player.playerId === currentPlayer.id)}
@@ -96,11 +100,11 @@ export default async function Page() {
       )}
 
       <div className="grid gap-6 lg:grid-cols-[1fr_1.1fr]">
-        <RosterPanel roster={roster} quickAddPlayers={quickAddPlayers} canManage={canManage} />
-        <MessageFeed messages={recentMessages} canManage={canManage} />
+        <RosterPanel roster={roster} quickAddPlayers={quickAddPlayers} canManage={canManage} locale={locale} />
+        <MessageFeed messages={recentMessages} canManage={canManage} locale={locale} />
       </div>
 
-      <TeamsPanel roster={roster} canManage={canManage && Boolean(training)} trainingId={training?.id} />
+      <TeamsPanel roster={roster} canManage={canManage && Boolean(training)} trainingId={training?.id} locale={locale} />
     </main>
   )
 }

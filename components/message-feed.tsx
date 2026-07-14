@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Check, Send } from "lucide-react"
+import type { Locale } from "@/lib/i18n"
 
 type Msg = {
   id: number
@@ -15,8 +16,9 @@ type Msg = {
   createdAt: Date | string
 }
 
-export function MessageFeed({ messages, canManage }: { messages: Msg[]; canManage: boolean }) {
+export function MessageFeed({ messages, canManage, locale = "de" }: { messages: Msg[]; canManage: boolean; locale?: Locale }) {
   const router = useRouter()
+  const t = locale === "de" ? { title: "WhatsApp Gruppe", description: <>Wer &quot;bin da&quot; schreibt, wird automatisch für das nächste Training eingetragen.</>, empty: "Noch keine Nachrichten.", matched: "eingetragen", message: "Nachricht", send: "Senden", placeholder: 'z.B. "bin da"', failed: "Nachricht konnte nicht gesendet werden." } : { title: "WhatsApp group", description: <>Anyone who writes &quot;bin da&quot; is automatically signed up for the next training.</>, empty: "No messages yet.", matched: "signed up", message: "Message", send: "Send", placeholder: 'e.g. "bin da"', failed: "Could not send message." }
   const [isPending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
   const formRef = useRef<HTMLFormElement>(null)
@@ -41,14 +43,14 @@ export function MessageFeed({ messages, canManage }: { messages: Msg[]; canManag
 
         if (!response.ok) {
           throw new Error(
-            typeof data?.error === "string" ? data.error : "Nachricht konnte nicht gesendet werden.",
+            typeof data?.error === "string" ? data.error : t.failed,
           )
         }
 
         form.reset()
         router.refresh()
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Nachricht konnte nicht gesendet werden.")
+        setError(err instanceof Error ? err.message : t.failed)
       }
     })
   }
@@ -56,15 +58,15 @@ export function MessageFeed({ messages, canManage }: { messages: Msg[]; canManag
   return (
     <Card className="flex h-full flex-col">
       <CardHeader>
-        <CardTitle className="text-lg">WhatsApp Gruppe</CardTitle>
+        <CardTitle className="text-lg">{t.title}</CardTitle>
         <p className="text-sm text-muted-foreground text-pretty">
-          Wer &quot;bin da&quot; schreibt, wird automatisch für das nächste Training eingetragen.
+          {t.description}
         </p>
       </CardHeader>
       <CardContent className="flex flex-1 flex-col gap-3">
         <div className="flex flex-1 flex-col gap-2 overflow-y-auto rounded-lg bg-muted p-3">
           {messages.length === 0 && (
-            <p className="m-auto text-sm text-muted-foreground">Noch keine Nachrichten.</p>
+            <p className="m-auto text-sm text-muted-foreground">{t.empty}</p>
           )}
           {messages.map((m) => (
             <div key={m.id} className="max-w-[85%] self-start rounded-lg rounded-tl-sm bg-card px-3 py-2 shadow-sm">
@@ -73,7 +75,7 @@ export function MessageFeed({ messages, canManage }: { messages: Msg[]; canManag
                 {m.matched && (
                   <span className="flex items-center gap-0.5 text-[10px] font-medium text-primary">
                     <Check className="size-3" aria-hidden />
-                    eingetragen
+                    {t.matched}
                   </span>
                 )}
               </div>
@@ -86,8 +88,8 @@ export function MessageFeed({ messages, canManage }: { messages: Msg[]; canManag
           <form ref={formRef} onSubmit={handleSimulateMessage} className="flex flex-col gap-2 sm:flex-row">
             <Input name="name" placeholder="Name" aria-label="Name" required className="sm:max-w-[35%]" />
             <div className="flex flex-1 gap-2">
-              <Input name="body" placeholder='z.B. "bin da"' aria-label="Nachricht" required />
-              <Button type="submit" size="icon" disabled={isPending} aria-label="Senden">
+              <Input name="body" placeholder={t.placeholder} aria-label={t.message} required />
+              <Button type="submit" size="icon" disabled={isPending} aria-label={t.send}>
                 <Send className="size-4" aria-hidden />
               </Button>
             </div>
