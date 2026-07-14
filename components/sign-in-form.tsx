@@ -3,7 +3,7 @@
 import { useState } from "react"
 import { Waves } from "lucide-react"
 
-import { signIn } from "@/lib/auth/client"
+import { authClient } from "@/lib/auth/client"
 import { Button } from "@/components/ui/button"
 import {
   Card,
@@ -13,28 +13,30 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 
-export function SignInForm({
-  hasError = false,
-}: {
-  hasError?: boolean
-}) {
+export function SignInForm({ hasError = false }: { hasError?: boolean }) {
   const [isLoading, setIsLoading] = useState(false)
-  const [error, setError] = useState<string | null>(
+  const [errorMessage, setErrorMessage] = useState<string | null>(
     hasError ? "Anmeldung fehlgeschlagen. Bitte erneut versuchen." : null,
   )
 
   async function handleGoogleSignIn() {
     setIsLoading(true)
-    setError(null)
+    setErrorMessage(null)
 
     try {
-      await signIn.social({
+      const result = await authClient.signIn.social({
         provider: "google",
         callbackURL: window.location.origin,
       })
-    } catch (cause) {
-      console.error("Google login failed:", cause)
-      setError("Die Google-Anmeldung konnte nicht gestartet werden.")
+
+      if (result?.error) {
+        console.error("Google login failed:", result.error)
+        setErrorMessage(formatAuthError(result.error))
+        setIsLoading(false)
+      }
+    } catch (error) {
+      console.error("Google login failed:", error)
+      setErrorMessage(formatAuthError(error))
       setIsLoading(false)
     }
   }
@@ -62,20 +64,27 @@ export function SignInForm({
           onClick={handleGoogleSignIn}
         >
           <GoogleMark />
-          {isLoading ? "Anmeldung wird geöffnet …" : "Mit Google anmelden"}
+          {isLoading ? "Anmeldung wird gestartet …" : "Mit Google anmelden"}
         </Button>
 
-        {error && (
-          <p
-            role="alert"
-            className="text-center text-sm text-destructive"
-          >
-            {error}
+        {errorMessage && (
+          <p role="alert" className="text-center text-sm text-destructive">
+            {errorMessage}
           </p>
         )}
       </CardContent>
     </Card>
   )
+}
+
+function formatAuthError(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error)
+
+  if (message.includes("403")) {
+    return "Google-Anmeldung wurde abgelehnt (HTTP 403). Prüfe die Trusted Domain in Neon Auth."
+  }
+
+  return "Die Google-Anmeldung konnte nicht gestartet werden."
 }
 
 function GoogleMark() {
