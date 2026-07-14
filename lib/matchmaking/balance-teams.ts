@@ -4,19 +4,12 @@ import { players, playerPositionRatings, signups, trainings } from "@/lib/db/sch
 import { getRatingConfidence, getRatingStatus } from "@/lib/ratings/confidence"
 import { ROTATION_BONUS_PER_SUBSTITUTE } from "@/lib/ratings/constants"
 import { PLAYER_POSITIONS, type PlayerPosition } from "@/lib/ratings/types"
-import { MAX_ACTIVE_PLAYERS_PER_TEAM } from "./constants"
+import { MAX_ACTIVE_PLAYERS_PER_TEAM, MAX_CANDIDATES, MAX_COMPUTATION_TIME_MS } from "./constants"
 import { getTargetLineup } from "./target-lineup"
+import { runGeneticOptimization, type GeneticOptions } from "./genetic"
+import type { DraftAssignment } from "./candidate"
 import type { MatchmakingAssignment, MatchmakingPlayer, MatchmakingResult, RotationGroup, TeamSummary } from "./types"
 
-function getPreferenceOrder(player: MatchmakingPlayer, position: PlayerPosition): number {
-  const explicitOrder = player.positionPreferences.find((entry) => entry.position === position)?.order
-  if (explicitOrder) return explicitOrder
-
-  const eligibleIndex = player.eligiblePositions.indexOf(position)
-  return eligibleIndex === -1 ? PLAYER_POSITIONS.length + 1 : PLAYER_POSITIONS.length + eligibleIndex + 1
-}
-
-export type DraftAssignment = Omit<MatchmakingAssignment, "rotationGroupId" | "rotationGroupType" | "rotationOrder" | "startsInWater" | "lineupType">
 
 function average(values: number[]): number { return values.reduce((sum, value) => sum + value, 0) / Math.max(1, values.length) }
 function spread(values: number[]): number { return values.length ? Math.max(...values) - Math.min(...values) : 0 }
@@ -76,7 +69,7 @@ export function buildRotationGroups(playersBySignup: Map<number, MatchmakingPlay
   return groups
 }
 
-function completeAssignments(players: MatchmakingPlayer[], drafts: DraftAssignment[], warnings: string[]): { assignments: MatchmakingAssignment[]; rotationGroups: RotationGroup[] } {
+export function completeAssignments(players: MatchmakingPlayer[], drafts: DraftAssignment[], warnings: string[]): { assignments: MatchmakingAssignment[]; rotationGroups: RotationGroup[] } {
   const availability = Object.fromEntries(PLAYER_POSITIONS.map((pos) => [pos, players.filter((p) => p.eligiblePositions.includes(pos)).length])) as Record<PlayerPosition, number>
   const target = getTargetLineup(MAX_ACTIVE_PLAYERS_PER_TEAM, availability)
   const bySignup = new Map(players.map((p) => [p.signupId, p]))
@@ -96,7 +89,7 @@ export function calculateEffectiveTeamStrength(groups: RotationGroup[]): number 
   return groups.reduce((sum, group) => sum + group.effectiveRating * group.activeSlotCount, 0) / activeSlotCount
 }
 
-function summarize(playersBySignup: Map<number, MatchmakingPlayer>, assignments: MatchmakingAssignment[], rotationGroups: RotationGroup[], team: 1 | 2): TeamSummary {
+export function summarize(playersBySignup: Map<number, MatchmakingPlayer>, assignments: MatchmakingAssignment[], rotationGroups: RotationGroup[], team: 1 | 2): TeamSummary {
   const mine = assignments.filter((a) => a.team === team)
   const active = mine.filter((a) => a.startsInWater)
   const subs = mine.filter((a) => !a.startsInWater)
@@ -119,55 +112,38 @@ export function getTripleActivePairRatings(ratings: [number, number, number]): [
   return [(ratings[0] + ratings[1]) / 2, (ratings[1] + ratings[2]) / 2, (ratings[2] + ratings[0]) / 2]
 }
 
-export function balanceMatchmakingPlayers(input: MatchmakingPlayer[]): MatchmakingResult {
+export function normalizeMatchmakingPlayers(input: MatchmakingPlayer[], warnings: string[]): MatchmakingPlayer[] {
+  const players = input.map((p) => p.eligiblePositions.length ? p : { ...p, eligiblePositions: [...PLAYER_POSITIONS], positionPreferences: PLAYER_POSITIONS.map((position, i) => ({ position, order: i + 1 })) })
+  for (const p of input.filter((p) => p.eligiblePositions.length === 0)) warnings.push(`${p.name} besitzt keine freigeschaltete Position und wurde nur provisorisch zugeordnet.`)
+  return players.sort((a, b) => a.signupId - b.signupId || a.playerId - b.playerId || a.name.localeCompare(b.name))
+}
+
+export function balanceMatchmakingPlayers(input: MatchmakingPlayer[], options: Partial<GeneticOptions> = {}): MatchmakingResult {
   const started = Date.now()
   const warnings: string[] = []
   if (input.length < 6) warnings.push("Weniger als sechs Spieler sind angemeldet. Die Aufteilung ist nur eingeschränkt aussagekräftig.")
   if (input.length % 2 === 1) warnings.push("Ungerade Teilnehmerzahl: Ein Spieler wird als Wechselspieler eingeplant.")
-  const players = input.map((p) => p.eligiblePositions.length ? p : { ...p, eligiblePositions: [...PLAYER_POSITIONS], positionPreferences: PLAYER_POSITIONS.map((position, i) => ({ position, order: i + 1 })) })
-  for (const p of input.filter((p) => p.eligiblePositions.length === 0)) warnings.push(`${p.name} besitzt keine freigeschaltete Position und wurde nur provisorisch zugeordnet.`)
+  const players = normalizeMatchmakingPlayers(input, warnings)
   const availability = Object.fromEntries(PLAYER_POSITIONS.map((pos) => [pos, players.filter((p) => p.eligiblePositions.includes(pos)).length])) as Record<PlayerPosition, number>
-  for (const pos of PLAYER_POSITIONS) if (availability[pos] < 2) warnings.push(`Nicht genügend Spieler für ${pos} verfügbar.`)
   const target = getTargetLineup(MAX_ACTIVE_PLAYERS_PER_TEAM, availability)
-  const ordered = [...players].sort((a, b) => a.eligiblePositions.length - b.eligiblePositions.length || a.name.localeCompare(b.name))
-  const drafts: DraftAssignment[] = []
-  const positionCounts = { 1: { goalkeeper: 0, defender: 0, forward: 0 }, 2: { goalkeeper: 0, defender: 0, forward: 0 } } as Record<1 | 2, Record<PlayerPosition, number>>
-  const teamCounts = { 1: 0, 2: 0 } as Record<1 | 2, number>
-  let candidatesEvaluated = 0
-  const maxTeamSize = Math.ceil(players.length / 2)
-  for (const p of ordered) {
-    const options: DraftAssignment[] = []
-    for (const position of p.eligiblePositions) for (const team of [1, 2] as const) {
-      if (teamCounts[team] >= maxTeamSize) continue
-      const createsSubstitute = positionCounts[team][position] >= target[position]
-      const teamHasCompleteStartingLineup = PLAYER_POSITIONS.every((candidate) => positionCounts[team][candidate] >= target[candidate])
-      if (!createsSubstitute || teamHasCompleteStartingLineup) options.push({ signupId: p.signupId, playerId: p.playerId, team, position })
-    }
-    if (options.length === 0) {
-      for (const position of p.eligiblePositions) for (const team of [1, 2] as const) {
-        if (teamCounts[team] < maxTeamSize) options.push({ signupId: p.signupId, playerId: p.playerId, team, position })
-      }
-    }
-    options.sort((a, b) => {
-      const teamSizeBias = (teamCounts[a.team] - teamCounts[b.team]) * 100000
-      const preferenceBias = (getPreferenceOrder(p, a.position) - getPreferenceOrder(p, b.position)) * 10000
-      const overUsefulSlotsBias = (Math.max(0, positionCounts[a.team][a.position] - target[a.position]) - Math.max(0, positionCounts[b.team][b.position] - target[b.position])) * 5000
-      const slotBias = (positionCounts[a.team][a.position] - positionCounts[b.team][b.position]) * 1000
-      const ratingBias = p.ratings[b.position] - p.ratings[a.position]
-      return teamSizeBias + preferenceBias + overUsefulSlotsBias + slotBias + ratingBias || a.team - b.team || a.position.localeCompare(b.position)
-    })
-    const chosen = options[0]
-    drafts.push(chosen); teamCounts[chosen.team]++; positionCounts[chosen.team][chosen.position]++; candidatesEvaluated += options.length
+  for (const pos of PLAYER_POSITIONS) {
+    if (availability[pos] < 2) warnings.push(`Nicht genügend Spieler für ${pos} verfügbar.`)
+    if (availability[pos] < target[pos] * 2) warnings.push(`Die Zielverteilung für ${pos} ist mit den verfügbaren Berechtigungen nur als Best-Effort erfüllbar.`)
   }
+  const result = runGeneticOptimization(players, {
+    seed: options.seed,
+    maxCandidates: options.maxCandidates ?? MAX_CANDIDATES,
+    maxGenerations: options.maxGenerations ?? 80,
+    maxComputationTimeMs: options.maxComputationTimeMs ?? MAX_COMPUTATION_TIME_MS,
+    populationSize: options.populationSize ?? 48,
+  }, warnings)
+  for (const team of [1, 2] as const) if (result.assignments.filter((a) => a.team === team && a.startsInWater).length > MAX_ACTIVE_PLAYERS_PER_TEAM) warnings.push("Mehr als sechs Spieler wurden als aktiv eingeplant.")
+  for (const group of result.rotationGroups.filter((g) => g.type === "triple" && g.ratingSpread > 200)) warnings.push(`Die Dreier-Wechselgruppe ${group.members.map((m) => m.name).join("/")} besitzt eine stark schwankende aktive Paarstärke. Die Elo-Spannweite dieser Wechselgruppe beträgt ${group.ratingSpread} Punkte.`)
+  const diff = Math.abs(result.team1.effectiveStrength - result.team2.effectiveStrength)
   const bySignup = new Map(players.map((p) => [p.signupId, p]))
-  const { assignments, rotationGroups } = completeAssignments(players, drafts, warnings)
-  for (const team of [1, 2] as const) if (assignments.filter((a) => a.team === team && a.startsInWater).length > MAX_ACTIVE_PLAYERS_PER_TEAM) warnings.push("Mehr als sechs Spieler wurden als aktiv eingeplant.")
-  for (const group of rotationGroups.filter((g) => g.type === "triple" && g.ratingSpread > 200)) warnings.push(`Die Dreier-Wechselgruppe ${group.members.map((m) => m.name).join("/")} besitzt eine stark schwankende aktive Paarstärke. Die Elo-Spannweite dieser Wechselgruppe beträgt ${group.ratingSpread} Punkte.`)
-  const finalTeam1 = summarize(bySignup, assignments, rotationGroups, 1), finalTeam2 = summarize(bySignup, assignments, rotationGroups, 2)
-  const diff = Math.abs(finalTeam1.effectiveStrength - finalTeam2.effectiveStrength)
-  const unstable = assignments.filter((a) => getRatingStatus(bySignup.get(a.signupId)!.gamesPlayed[a.position]) !== "established").length
-  const quality = warnings.length || diff > 80 ? "low" : diff > 25 || unstable > assignments.length / 3 ? "medium" : "high"
-  return { assignments, rotationGroups, team1: finalTeam1, team2: finalTeam2, warnings, computationTimeMs: Date.now() - started, candidatesEvaluated, optimality: candidatesEvaluated > 10000 ? "best-found" : "exact", quality }
+  const unstable = result.assignments.filter((a) => getRatingStatus(bySignup.get(a.signupId)!.gamesPlayed[a.position]) !== "established").length
+  const quality = warnings.length || diff > 80 ? "low" : diff > 25 || unstable > result.assignments.length / 3 ? "medium" : "high"
+  return { ...result, warnings, computationTimeMs: Date.now() - started, optimality: "best-found", quality }
 }
 
 async function loadMatchmakingPlayers(trainingId: number) {
