@@ -1,6 +1,6 @@
 import "server-only"
 
-import { and, eq, isNull } from "drizzle-orm"
+import { eq } from "drizzle-orm"
 
 import { db } from "@/lib/db"
 import { players, type Player } from "@/lib/db/schema"
@@ -15,11 +15,7 @@ export async function getCurrentPlayerForUser(user: SessionUser): Promise<Player
   const [byAuthUserId] = await db.select().from(players).where(eq(players.authUserId, user.id)).limit(1)
   if (byAuthUserId) return byAuthUserId
 
-  const [byEmail] = await db
-    .select()
-    .from(players)
-    .where(and(eq(players.email, normalizedEmail), isNull(players.authUserId)))
-    .limit(1)
+  const [byEmail] = await db.select().from(players).where(eq(players.email, normalizedEmail)).limit(1)
 
   return byEmail ?? null
 }

@@ -1,6 +1,6 @@
 import "server-only"
 
-import { and, eq, isNull } from "drizzle-orm"
+import { eq } from "drizzle-orm"
 
 import { db } from "@/lib/db"
 import { playerPositionRatings, players, type Player } from "@/lib/db/schema"
@@ -23,17 +23,15 @@ export async function ensureCurrentPlayerProfile(user: SessionUser): Promise<Pla
   const [byAuthUserId] = await db.select().from(players).where(eq(players.authUserId, user.id)).limit(1)
   if (byAuthUserId) return byAuthUserId
 
-  const [unlinkedByEmail] = await db
-    .select()
-    .from(players)
-    .where(and(eq(players.email, normalizedEmail), isNull(players.authUserId)))
-    .limit(1)
+  const [byEmail] = await db.select().from(players).where(eq(players.email, normalizedEmail)).limit(1)
 
-  if (unlinkedByEmail) {
+  if (byEmail) {
+    if (byEmail.authUserId === user.id) return byEmail
+
     const [linked] = await db
       .update(players)
       .set({ authUserId: user.id, email: normalizedEmail, updatedAt: new Date() })
-      .where(eq(players.id, unlinkedByEmail.id))
+      .where(eq(players.id, byEmail.id))
       .returning()
     await initializePlayerRatings(linked.id)
     return linked
@@ -46,6 +44,10 @@ export async function ensureCurrentPlayerProfile(user: SessionUser): Promise<Pla
         authUserId: user.id,
         email: normalizedEmail,
         name: user.name?.trim() || normalizedEmail.split("@")[0],
+      })
+      .onConflictDoUpdate({
+        target: players.email,
+        set: { authUserId: user.id, updatedAt: new Date() },
       })
       .returning()
 
