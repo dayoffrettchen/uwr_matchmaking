@@ -1,7 +1,7 @@
 "use server"
 
 import { db } from "@/lib/db"
-import { messages, players, signups, trainings } from "@/lib/db/schema"
+import { messages, playerPositionRatings, players, signups, trainings } from "@/lib/db/schema"
 import { getSessionUser } from "@/lib/auth/server"
 import { ensureDatabaseSchema } from "@/lib/db/ensure-schema"
 import { asc, desc, eq, inArray, sql } from "drizzle-orm"
@@ -53,7 +53,7 @@ export async function getDashboardData() {
 
   const previousTrainingIds = previousTrainings.map((previousTraining) => previousTraining.id)
 
-  const [allPlayers, previousSignups] = await Promise.all([
+  const [allPlayers, previousSignups, rosterRatings] = await Promise.all([
     db.select({ id: players.id, name: players.name }).from(players).orderBy(asc(players.name)),
     previousTrainingIds.length > 0
       ? db
@@ -61,7 +61,29 @@ export async function getDashboardData() {
           .from(signups)
           .where(inArray(signups.trainingId, previousTrainingIds))
       : Promise.resolve([]),
+    roster.length > 0
+      ? db
+          .select({
+            playerId: playerPositionRatings.playerId,
+            position: playerPositionRatings.position,
+            rating: playerPositionRatings.rating,
+          })
+          .from(playerPositionRatings)
+          .where(inArray(playerPositionRatings.playerId, roster.map((player) => player.playerId)))
+      : Promise.resolve([]),
   ])
+
+  const ratingsByPlayerAndPosition = new Map<string, number>()
+  for (const rating of rosterRatings) {
+    ratingsByPlayerAndPosition.set(`${rating.playerId}:${rating.position}`, rating.rating)
+  }
+
+  const rosterWithRatings = roster.map((player) => ({
+    ...player,
+    assignedRating: player.assignedPosition
+      ? (ratingsByPlayerAndPosition.get(`${player.playerId}:${player.assignedPosition}`) ?? null)
+      : null,
+  }))
 
   const currentRosterPlayerIds = new Set(roster.map((player) => player.playerId))
   const attendanceByPlayerId = new Map<number, number>()
@@ -84,5 +106,5 @@ export async function getDashboardData() {
     .orderBy(desc(messages.createdAt))
     .limit(20)
 
-  return { user, training, roster, quickAddPlayers, recentMessages: recentMessages.reverse() }
+  return { user, training, roster: rosterWithRatings, quickAddPlayers, recentMessages: recentMessages.reverse() }
 }
