@@ -8,6 +8,7 @@ import { db } from "@/lib/db"
 import { signups, trainings } from "@/lib/db/schema"
 import { requireCurrentPlayer } from "@/lib/players/current-player"
 import { signUpPlayer } from "@/lib/signup"
+import { applyRosterChangeTeamPolicy } from "@/lib/training/auto-teams"
 
 async function requireOpenTraining(trainingId: number) {
   const [training] = await db.select().from(trainings).where(eq(trainings.id, trainingId)).limit(1)
@@ -16,12 +17,6 @@ async function requireOpenTraining(trainingId: number) {
   return training
 }
 
-async function resetCurrentLineup(trainingId: number, tx: Pick<typeof db, "update"> = db) {
-  await tx
-    .update(signups)
-    .set({ team: null, assignedPosition: null, lineupType: null, rotationGroupId: null, rotationGroupType: null, rotationOrder: null, startsInWater: null })
-    .where(eq(signups.trainingId, trainingId))
-}
 
 export async function signUpCurrentPlayer(trainingId: number): Promise<void> {
   const currentPlayer = await requireCurrentPlayer()
@@ -44,14 +39,12 @@ export async function signUpCurrentPlayer(trainingId: number): Promise<void> {
 
 export async function withdrawCurrentPlayer(trainingId: number): Promise<void> {
   const currentPlayer = await requireCurrentPlayer()
-  await requireOpenTraining(trainingId)
+  const training = await requireOpenTraining(trainingId)
 
-  await db.transaction(async (tx) => {
-    await tx
-      .delete(signups)
-      .where(and(eq(signups.trainingId, trainingId), eq(signups.playerId, currentPlayer.id)))
-    await resetCurrentLineup(trainingId, tx)
-  })
+  await db
+    .delete(signups)
+    .where(and(eq(signups.trainingId, trainingId), eq(signups.playerId, currentPlayer.id)))
+  await applyRosterChangeTeamPolicy(training)
 
   revalidatePath("/")
 }

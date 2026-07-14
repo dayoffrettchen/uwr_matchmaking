@@ -4,8 +4,9 @@ import { eq } from "drizzle-orm"
 
 import { requireOrganizer } from "@/lib/auth/server"
 import { db } from "@/lib/db"
-import { signups } from "@/lib/db/schema"
+import { signups, trainings } from "@/lib/db/schema"
 import { signUpPlayer } from "@/lib/signup"
+import { applyRosterChangeTeamPolicy } from "@/lib/training/auto-teams"
 
 type AddSignupRequest = {
   name?: string
@@ -56,7 +57,14 @@ export async function DELETE(request: Request) {
       return NextResponse.json({ error: "Ungültige Anmeldung." }, { status: 400 })
     }
 
+    const [signup] = await db.select().from(signups).where(eq(signups.id, signupId as number)).limit(1)
+    if (!signup) return NextResponse.json({ ok: true })
+
+    const [training] = await db.select().from(trainings).where(eq(trainings.id, signup.trainingId)).limit(1)
+
     await db.delete(signups).where(eq(signups.id, signupId as number))
+    if (training) await applyRosterChangeTeamPolicy(training)
+
     revalidatePath("/")
 
     return NextResponse.json({ ok: true })

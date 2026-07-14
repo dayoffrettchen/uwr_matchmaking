@@ -2,6 +2,7 @@ import { db } from "@/lib/db"
 import { messages, players, signups, trainings } from "@/lib/db/schema"
 import { initializePlayerRatings } from "@/lib/players/initialize-ratings"
 import { ensureNextRegularTraining } from "@/lib/training/schedule"
+import { applyRosterChangeTeamPolicy } from "@/lib/training/auto-teams"
 import { and, eq } from "drizzle-orm"
 
 // Phrases that count as "I'm coming" / present.
@@ -66,14 +67,12 @@ export async function signUpPlayer(opts: {
     return { ok: true as const, alreadySignedUp: true, training, player }
   }
 
-  await db.transaction(async (tx) => {
-    await tx.insert(signups).values({
-      trainingId: training.id,
-      playerId: player.id,
-      source: opts.source ?? "app",
-    })
-    await tx.update(signups).set({ team: null, assignedPosition: null, lineupType: null, rotationGroupId: null, rotationGroupType: null, rotationOrder: null, startsInWater: null }).where(eq(signups.trainingId, training.id))
+  await db.insert(signups).values({
+    trainingId: training.id,
+    playerId: player.id,
+    source: opts.source ?? "app",
   })
+  await applyRosterChangeTeamPolicy(training)
 
   return { ok: true as const, alreadySignedUp: false, training, player }
 }
