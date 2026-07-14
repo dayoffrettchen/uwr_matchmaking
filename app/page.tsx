@@ -7,7 +7,6 @@ import { AppNavigation } from "@/components/app-navigation"
 import { Card, CardContent } from "@/components/ui/card"
 import { SelfServiceTrainingActions } from "@/components/self-service-training-actions"
 import { CalendarDays, Clock, MapPin, Waves } from "lucide-react"
-import { canPlanTraining, formatTrainingPlanningDeadline } from "@/lib/training/planning"
 import { redirect } from "next/navigation"
 
 export const dynamic = "force-dynamic"
@@ -33,9 +32,6 @@ export default async function Page() {
   if (user.role === "player" && currentPlayer && !currentPlayer.profileCompleted) redirect("/profil")
 
   const trainingIsPast = training ? new Date(training.scheduledAt).getTime() < Date.now() : false
-  const trainingCanBePlanned = training ? canPlanTraining(training.scheduledAt) : false
-  const planningDeadlineLabel = training ? formatTrainingPlanningDeadline(training.scheduledAt) : null
-
   const dateLabel = training ? formatTrainingDate(training.scheduledAt) : null
 
   return (
@@ -80,11 +76,9 @@ export default async function Page() {
                 Vergangenes Training
               </span>
             )}
-            {planningDeadlineLabel && (
-              <span className="rounded-full bg-primary-foreground/15 px-2 py-0.5 text-xs font-medium">
-                Einteilung bis {planningDeadlineLabel} möglich
-              </span>
-            )}
+            <span className="rounded-full bg-primary-foreground/15 px-2 py-0.5 text-xs font-medium">
+              Anmeldung offiziell bis 15:00, inoffiziell bis 16:00 · Einteilung jederzeit möglich
+            </span>
           </CardContent>
         </Card>
       ) : (
@@ -100,7 +94,7 @@ export default async function Page() {
         <MessageFeed messages={recentMessages} canManage={canManage} />
       </div>
 
-      <TeamsPanel roster={roster} canManage={canManage && trainingCanBePlanned} trainingId={training?.id} />
+      <TeamsPanel roster={roster} canManage={canManage && Boolean(training)} trainingId={training?.id} />
     </main>
   )
 }

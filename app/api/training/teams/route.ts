@@ -6,8 +6,7 @@ import { assignBalancedTeams } from "@/lib/matchmaking/balance-teams"
 import { PLAYER_POSITIONS, type PlayerPosition } from "@/lib/ratings/types"
 import { db } from "@/lib/db"
 import { trainings } from "@/lib/db/schema"
-import { desc, eq } from "drizzle-orm"
-import { canPlanTraining, formatTrainingPlanningDeadline } from "@/lib/training/planning"
+import { asc, eq, sql } from "drizzle-orm"
 
 type TeamActionRequest = {
   action?: "generate" | "clear" | "move"
@@ -27,17 +26,14 @@ export async function POST(request: Request) {
 
     const [training] = trainingId
       ? await db.select().from(trainings).where(eq(trainings.id, trainingId)).limit(1)
-      : await db.select().from(trainings).where(eq(trainings.isOpen, true)).orderBy(desc(trainings.scheduledAt)).limit(1)
+      : await db.select().from(trainings).where(sql`${trainings.isOpen} = true and ${trainings.scheduledAt} >= ${new Date()}`).orderBy(asc(trainings.scheduledAt)).limit(1)
 
     if (!training) return NextResponse.json({ error: "Training nicht gefunden" }, { status: 404 })
-    if (!canPlanTraining(training.scheduledAt)) {
-      return NextResponse.json({ error: `Die Einteilung war nur bis ${formatTrainingPlanningDeadline(training.scheduledAt)} möglich.` }, { status: 403 })
-    }
 
     if (body?.action === "generate") {
-      await assignBalancedTeams(trainingId)
+      await assignBalancedTeams(training.id)
     } else if (body?.action === "clear") {
-      await resetTeams(trainingId)
+      await resetTeams(training.id)
     } else if (body?.action === "move") {
       const signupId = body.signupId
       const team = body.team
@@ -47,7 +43,7 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: "Ungültige Team-Zuordnung" }, { status: 400 })
       }
 
-      await moveSignupToTeam({ signupId, team, position, trainingId })
+      await moveSignupToTeam({ signupId, team, position, trainingId: training.id })
     } else {
       return NextResponse.json({ error: "Unbekannte Team-Aktion" }, { status: 400 })
     }

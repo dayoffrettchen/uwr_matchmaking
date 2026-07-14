@@ -13,18 +13,19 @@ export async function getDashboardData() {
 
   const currentPlayer = user?.role === "player" ? await ensureCurrentPlayerProfile(user) : null
 
-  const [openTraining] = await db
+  const now = new Date()
+  const [nextTraining] = await db
     .select()
     .from(trainings)
-    .where(eq(trainings.isOpen, true))
-    .orderBy(desc(trainings.scheduledAt))
+    .where(sql`${trainings.scheduledAt} >= ${now}`)
+    .orderBy(asc(trainings.scheduledAt))
     .limit(1)
 
-  const [latestTraining] = openTraining
-    ? [openTraining]
+  const [fallbackTraining] = nextTraining
+    ? [nextTraining]
     : await db.select().from(trainings).orderBy(desc(trainings.scheduledAt)).limit(1)
 
-  const training = latestTraining ?? null
+  const training = fallbackTraining ?? null
 
   if (!training) {
     return { user, training: null, roster: [], quickAddPlayers: [], recentMessages: [], currentPlayer }
