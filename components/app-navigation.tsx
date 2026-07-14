@@ -24,6 +24,7 @@ export function AppNavigation({ role = "player", locale = "de" }: { role?: AppRo
     { href: "/spieler", label: t.players },
     { href: "/ergebnisse", label: t.results },
     { href: "/ranking", label: "Ranking" },
+    { href: "/einstellungen", label: "Einstellungen" },
     { href: "/profil", label: t.profile },
   ]
   const playerItems = [

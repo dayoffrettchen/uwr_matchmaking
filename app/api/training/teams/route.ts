@@ -1,9 +1,11 @@
+import { cookies } from "next/headers"
 import { NextResponse } from "next/server"
 import { revalidatePath } from "next/cache"
 import { requireOrganizer } from "@/lib/auth/server"
 import { ensureNextRegularTraining } from "@/lib/training/schedule"
 import { moveSignupToTeam, resetTeams } from "@/lib/teams"
 import { assignBalancedTeams } from "@/lib/matchmaking/balance-teams"
+import { MATCHMAKING_SETTINGS_COOKIE, parseMatchmakingSettingsCookie } from "@/lib/matchmaking/settings"
 import { PLAYER_POSITIONS, type PlayerPosition } from "@/lib/ratings/types"
 import { db } from "@/lib/db"
 import { trainings } from "@/lib/db/schema"
@@ -32,7 +34,9 @@ export async function POST(request: Request) {
     if (!training) return NextResponse.json({ error: "Training nicht gefunden" }, { status: 404 })
 
     if (body?.action === "generate") {
-      await assignBalancedTeams(training.id)
+      const cookieStore = await cookies()
+      const settings = parseMatchmakingSettingsCookie(cookieStore.get(MATCHMAKING_SETTINGS_COOKIE)?.value)
+      await assignBalancedTeams(training.id, settings)
     } else if (body?.action === "clear") {
       await resetTeams(training.id)
     } else if (body?.action === "move") {
