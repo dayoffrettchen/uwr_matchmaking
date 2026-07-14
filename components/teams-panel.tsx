@@ -213,8 +213,8 @@ function TeamColumn({
       <div className={`flex flex-col gap-2 rounded-t-lg px-4 py-3 sm:flex-row sm:items-start sm:justify-between ${headerClassName}`}>
         <span className="whitespace-nowrap text-lg font-semibold leading-tight">{label}</span>
         <div className="flex flex-wrap gap-2 sm:justify-end">
-          <Badge variant="secondary" className="whitespace-nowrap">{active} im Wasser · {subs} draußen</Badge>
-          {averageRating !== null && <Badge variant="secondary" className="whitespace-nowrap">Ø MMR {averageRating}</Badge>}
+          <Badge variant="secondary" className="whitespace-nowrap bg-card text-card-foreground">{active} im Wasser · {subs} draußen</Badge>
+          {averageRating !== null && <Badge variant="secondary" className="whitespace-nowrap bg-card text-card-foreground">Ø MMR {averageRating}</Badge>}
         </div>
       </div>
       <div className="grid gap-3 p-3">

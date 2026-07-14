@@ -16,26 +16,34 @@ function spread(values: number[]): number { return values.length ? Math.max(...v
 
 function makeGroup(id: number, team: 1 | 2, position: PlayerPosition, members: MatchmakingPlayer[], type: "single" | "pair" | "triple", startIndexes: Set<number>): RotationGroup {
   const ratings = members.map((member) => member.ratings[position])
-  const activeSlotCount = type === "triple" ? 2 : 1
-  const activePairRatings = type === "triple" ? ratings.map((rating, index) => (rating + ratings[(index + 1) % ratings.length]) / 2) : undefined
+  const activeSlotCount: 1 | 2 = startIndexes.size > 1 ? 2 : 1
+  const activePairRatings = type === "triple" && activeSlotCount > 1 ? ratings.map((rating, index) => (rating + ratings[(index + 1) % ratings.length]) / 2) : undefined
   const averageMemberRating = Math.round(average(ratings))
   const effectiveRating = type === "single"
     ? averageMemberRating
     : type === "pair"
       ? Math.round(averageMemberRating + ROTATION_BONUS_PER_SUBSTITUTE)
-      : Math.round(average(activePairRatings!) + ROTATION_BONUS_PER_SUBSTITUTE / 2)
+      : activePairRatings
+        ? Math.round(average(activePairRatings) + ROTATION_BONUS_PER_SUBSTITUTE / 2)
+        : Math.round(averageMemberRating + ROTATION_BONUS_PER_SUBSTITUTE)
   return {
     id, team, position, type, activeSlotCount,
     members: members.map((member, index) => ({ signupId: member.signupId, playerId: member.playerId, name: member.name, rating: member.ratings[position], rotationOrder: index + 1, startsInWater: startIndexes.has(index) })),
     averageMemberRating,
     effectiveRating,
-    ratingSpread: Math.round(type === "triple" ? spread(activePairRatings!) : spread(ratings)),
+    ratingSpread: Math.round(activePairRatings ? spread(activePairRatings) : spread(ratings)),
     activePairRatings: activePairRatings?.map(Math.round),
   }
 }
 
 function pairings<T>(items: T[]): Array<[T[], T[]]> {
   return [[[items[0], items[1]], [items[2], items[3]]], [[items[0], items[2]], [items[1], items[3]]], [[items[0], items[3]], [items[1], items[2]]]]
+}
+
+function buildSingleSlotGroups(members: MatchmakingPlayer[], slots: number, position: PlayerPosition): MatchmakingPlayer[][] {
+  const groups = Array.from({ length: slots }, () => [] as MatchmakingPlayer[])
+  members.forEach((member, index) => groups[index % slots].push(member))
+  return groups.sort((a, b) => b.length - a.length || b[0].ratings[position] - a[0].ratings[position])
 }
 
 export function buildRotationGroups(playersBySignup: Map<number, MatchmakingPlayer>, drafts: DraftAssignment[], target: Record<PlayerPosition, number>, warnings: string[]): RotationGroup[] {
@@ -61,6 +69,12 @@ export function buildRotationGroups(playersBySignup: Map<number, MatchmakingPlay
       } else {
         const best = pairings(members).sort((a, b) => (spread(a[0].map((m) => m.ratings[position])) + spread(a[1].map((m) => m.ratings[position]))) - (spread(b[0].map((m) => m.ratings[position])) + spread(b[1].map((m) => m.ratings[position]))))[0]
         for (const pair of best) groups.push(makeGroup(nextGroupId++, team, position, pair, "pair", new Set([0])))
+      }
+    } else if (slots > 2) {
+      if (members.length > slots * 2) warnings.push(`Für ${position} wurden sehr viele Wechselspieler eingeplant. Es wurde ein erweiterter Rotationsplan erzeugt.`)
+      for (const groupMembers of buildSingleSlotGroups(members, slots, position)) {
+        const type = groupMembers.length === 1 ? "single" : groupMembers.length === 2 ? "pair" : "triple"
+        groups.push(makeGroup(nextGroupId++, team, position, groupMembers, type, new Set([0])))
       }
     } else {
       for (const member of members.slice(0, slots)) groups.push(makeGroup(nextGroupId++, team, position, [member], "single", new Set([0])))

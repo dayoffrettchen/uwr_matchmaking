@@ -5,6 +5,7 @@ import { fromDraftAssignments } from "../candidate"
 import { OBJECTIVE_WEIGHTS } from "../constants"
 import { evaluateCandidate, getPositionPenalty } from "../fitness"
 import { buildGreedySeed } from "../greedy"
+import { getTargetLineup } from "../target-lineup"
 import type { MatchmakingPlayer } from "../types"
 
 function player(id: number, name: string, ratings: Partial<Record<PlayerPosition, number>>, eligiblePositions: PlayerPosition[] = [...PLAYER_POSITIONS], prefs: PlayerPosition[] = eligiblePositions): MatchmakingPlayer {
@@ -36,6 +37,10 @@ const fairnessFixture = () => [
 ]
 
 describe("genetisches Matchmaking", () => {
+  it("plant die UWR-Startaufstellung als 1 Torwart, 2 Verteidiger und 3 Stürmer", () => {
+    expect(getTargetLineup(6)).toEqual({ goalkeeper: 1, defender: 2, forward: 3 })
+  })
+
   it("erfüllt Teamgrößen, Vollständigkeit und Positionsberechtigungen", () => {
     const result = balanceMatchmakingPlayers(fairnessFixture(), { seed: 7, maxCandidates: 300, maxGenerations: 12, maxComputationTimeMs: 0, populationSize: 24 })
     expect(result.assignments.filter((a) => a.team === 1)).toHaveLength(6)
