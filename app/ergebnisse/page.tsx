@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation"
 import { desc, eq, inArray, sql } from "drizzle-orm"
-import { CheckCircle2, ClipboardList, Trophy } from "lucide-react"
+import { CheckCircle2, ClipboardCheck, ClipboardList, ShieldCheck, Trophy } from "lucide-react"
 import { AppNavigation } from "@/components/app-navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -27,6 +27,7 @@ type MatchRow = {
 
 type MatchPlayerRow = {
   matchId: number
+  playerId: number
   name: string
   team: number
   position: string
@@ -45,6 +46,26 @@ function formatDate(date: Date) {
 
 function groupPlayers(playersForMatch: MatchPlayerRow[], team: 1 | 2) {
   return playersForMatch.filter((player) => player.team === team)
+}
+
+function pickDutyPlayer(players: MatchPlayerRow[], matchId: number, offset: number) {
+  if (players.length === 0) return null
+
+  const orderedPlayers = [...players].sort((a, b) => a.playerId - b.playerId)
+  return orderedPlayers[(matchId + offset) % orderedPlayers.length]
+}
+
+function getMatchDuties(playersForMatch: MatchPlayerRow[], matchId: number) {
+  const team1 = groupPlayers(playersForMatch, 1)
+  const team2 = groupPlayers(playersForMatch, 2)
+  const entryTeam = matchId % 2 === 0 ? 1 : 2
+  const entryCandidates = entryTeam === 1 ? team1 : team2
+  const checkerCandidates = entryTeam === 1 ? team2 : team1
+
+  return {
+    entryPlayer: pickDutyPlayer(entryCandidates, matchId, 0),
+    checkerPlayer: pickDutyPlayer(checkerCandidates, matchId, 1),
+  }
 }
 
 export default async function ErgebnissePage() {
@@ -102,6 +123,7 @@ export default async function ErgebnissePage() {
     ? await db
         .select({
           matchId: matchPlayers.matchId,
+          playerId: players.id,
           name: players.name,
           team: matchPlayers.team,
           position: matchPlayers.position,
@@ -172,6 +194,7 @@ export default async function ErgebnissePage() {
           matchRows.map((match) => {
             const playersForMatch = matchPlayerRows.filter((player) => player.matchId === match.id)
             const finalized = match.status === "finalized"
+            const duties = getMatchDuties(playersForMatch, match.id)
 
             return (
               <Card key={match.id}>
@@ -194,6 +217,7 @@ export default async function ErgebnissePage() {
                       </span>
                     )}
                   </div>
+                  <MatchDuties entryPlayer={duties.entryPlayer} checkerPlayer={duties.checkerPlayer} />
                   <div className="grid gap-3 sm:grid-cols-2">
                     <ResultTeam label="Team 1" players={groupPlayers(playersForMatch, 1)} />
                     <ResultTeam label="Team 2" players={groupPlayers(playersForMatch, 2)} />
@@ -228,6 +252,32 @@ export default async function ErgebnissePage() {
         )}
       </section>
     </main>
+  )
+}
+
+
+function MatchDuties({ entryPlayer, checkerPlayer }: { entryPlayer: MatchPlayerRow | null; checkerPlayer: MatchPlayerRow | null }) {
+  return (
+    <div className="grid gap-3 rounded-lg border bg-muted/40 p-3 sm:grid-cols-2">
+      <div className="flex items-start gap-2">
+        <ClipboardCheck className="mt-0.5 size-4 text-primary" aria-hidden />
+        <div>
+          <p className="text-sm font-semibold">Eintragen</p>
+          <p className="text-sm text-muted-foreground">
+            {entryPlayer ? `${entryPlayer.name} aus Team ${entryPlayer.team}` : "Noch kein Spieler zugeteilt"}
+          </p>
+        </div>
+      </div>
+      <div className="flex items-start gap-2">
+        <ShieldCheck className="mt-0.5 size-4 text-primary" aria-hidden />
+        <div>
+          <p className="text-sm font-semibold">Kontrollieren</p>
+          <p className="text-sm text-muted-foreground">
+            {checkerPlayer ? `${checkerPlayer.name} aus Team ${checkerPlayer.team}` : "Noch kein Gegenspieler zugeteilt"}
+          </p>
+        </div>
+      </div>
+    </div>
   )
 }
 
