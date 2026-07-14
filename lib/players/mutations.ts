@@ -1,19 +1,16 @@
 "use server"
 
 import { revalidatePath } from "next/cache"
-import { and, eq, ne } from "drizzle-orm"
+import { and, eq, inArray, ne } from "drizzle-orm"
 import { db } from "@/lib/db"
 import { playerPositionRatings } from "@/lib/db/schema"
 import { requireOrganizer } from "@/lib/auth/server"
+import { DEFAULT_RATING } from "@/lib/ratings/constants"
 import { PLAYER_POSITIONS, type PlayerPosition } from "@/lib/ratings/types"
 
 export type UpdatePlayerPositionRatingState = {
   ok: boolean
   message?: string
-}
-
-function assertPosition(position: string): asserts position is PlayerPosition {
-  if (!PLAYER_POSITIONS.includes(position as PlayerPosition)) throw new Error("Ungültige Position")
 }
 
 function parseNullablePreferenceOrder(value: FormDataEntryValue | null): number | null {
@@ -36,6 +33,10 @@ function parseRating(value: FormDataEntryValue | null, fallback: number): number
   return rating
 }
 
+function fieldName(position: PlayerPosition, name: string) {
+  return `${position}:${name}`
+}
+
 export async function updatePlayerPositionRating(
   _previousState: UpdatePlayerPositionRatingState,
   formData: FormData,
@@ -44,40 +45,77 @@ export async function updatePlayerPositionRating(
     await requireOrganizer()
 
     const playerId = Number(formData.get("playerId"))
-    const position = String(formData.get("position") ?? "")
-    assertPosition(position)
-
-    const preferenceOrder = parseNullablePreferenceOrder(formData.get("preferenceOrder"))
-    const isEligible = formData.get("isEligible") === "on" || preferenceOrder !== null
-    const savedPreferenceOrder = isEligible ? preferenceOrder : null
-    const initialRating = parseRating(formData.get("initialRating"), 1000)
-    const rating = parseRating(formData.get("rating"), initialRating)
-
     if (!Number.isInteger(playerId) || playerId <= 0) {
       throw new Error("Ungültiger Spieler")
     }
 
-    await db.transaction(async (tx) => {
-      if (savedPreferenceOrder) {
-        await tx
-          .update(playerPositionRatings)
-          .set({ preferenceOrder: null, updatedAt: new Date() })
-          .where(
-            and(
-              eq(playerPositionRatings.playerId, playerId),
-              eq(playerPositionRatings.preferenceOrder, savedPreferenceOrder),
-              ne(playerPositionRatings.position, position),
-            ),
-          )
-      }
+    const submittedPositions = formData.getAll("positions").map(String)
+    if (
+      submittedPositions.length !== PLAYER_POSITIONS.length ||
+      new Set(submittedPositions).size !== submittedPositions.length ||
+      submittedPositions.some((position) => !PLAYER_POSITIONS.includes(position as PlayerPosition))
+    ) {
+      throw new Error("Ungültige Position")
+    }
 
-      await tx
-        .insert(playerPositionRatings)
-        .values({ playerId, position, initialRating, rating, isEligible, preferenceOrder: savedPreferenceOrder })
-        .onConflictDoUpdate({
-          target: [playerPositionRatings.playerId, playerPositionRatings.position],
-          set: { initialRating, rating, isEligible, preferenceOrder: savedPreferenceOrder, updatedAt: new Date() },
-        })
+    const existingRatings = await db
+      .select({
+        position: playerPositionRatings.position,
+        initialRating: playerPositionRatings.initialRating,
+        gamesPlayed: playerPositionRatings.gamesPlayed,
+      })
+      .from(playerPositionRatings)
+      .where(and(eq(playerPositionRatings.playerId, playerId), inArray(playerPositionRatings.position, submittedPositions)))
+
+    const existingByPosition = new Map(
+      existingRatings.map((rating) => [
+        rating.position as PlayerPosition,
+        { initialRating: rating.initialRating, gamesPlayed: rating.gamesPlayed },
+      ]),
+    )
+
+    const updates = PLAYER_POSITIONS.map((position) => {
+      const existing = existingByPosition.get(position)
+      const initialRating = existing?.gamesPlayed
+        ? (existing.initialRating ?? DEFAULT_RATING)
+        : parseRating(formData.get(fieldName(position, "initialRating")), existing?.initialRating ?? DEFAULT_RATING)
+      const rating = parseRating(formData.get(fieldName(position, "rating")), initialRating)
+      const preferenceOrder = parseNullablePreferenceOrder(formData.get(fieldName(position, "preferenceOrder")))
+      const isEligible = formData.get(fieldName(position, "isEligible")) === "on" || preferenceOrder !== null
+
+      return { position, initialRating, rating, isEligible, preferenceOrder: isEligible ? preferenceOrder : null }
+    })
+
+    const preferenceOrders = updates
+      .map((update) => update.preferenceOrder)
+      .filter((preferenceOrder): preferenceOrder is number => preferenceOrder !== null)
+    if (new Set(preferenceOrders).size !== preferenceOrders.length) {
+      throw new Error("Jede Präferenz darf nur einmal vergeben werden")
+    }
+
+    await db.transaction(async (tx) => {
+      for (const update of updates) {
+        if (update.preferenceOrder) {
+          await tx
+            .update(playerPositionRatings)
+            .set({ preferenceOrder: null, updatedAt: new Date() })
+            .where(
+              and(
+                eq(playerPositionRatings.playerId, playerId),
+                eq(playerPositionRatings.preferenceOrder, update.preferenceOrder),
+                ne(playerPositionRatings.position, update.position),
+              ),
+            )
+        }
+
+        await tx
+          .insert(playerPositionRatings)
+          .values({ playerId, ...update })
+          .onConflictDoUpdate({
+            target: [playerPositionRatings.playerId, playerPositionRatings.position],
+            set: { ...update, updatedAt: new Date() },
+          })
+      }
     })
 
     revalidatePath("/spieler")
