@@ -10,6 +10,18 @@ import { redirect } from "next/navigation"
 
 export const dynamic = "force-dynamic"
 
+const TRAINING_START_TIME = "19:00"
+
+function formatTrainingDate(scheduledAt: Date) {
+  const date = new Date(scheduledAt).toLocaleDateString("de-DE", {
+    weekday: "long",
+    day: "2-digit",
+    month: "long",
+  })
+
+  return `${date} um ${TRAINING_START_TIME}`
+}
+
 export default async function Page() {
   const { user, training, roster, recentMessages } = await getDashboardData()
 
@@ -18,15 +30,7 @@ export default async function Page() {
   const canManage = user.role === "organizer"
   const trainingIsPast = training ? new Date(training.scheduledAt).getTime() < Date.now() : false
 
-  const dateLabel = training
-    ? new Date(training.scheduledAt).toLocaleString("de-DE", {
-        weekday: "long",
-        day: "2-digit",
-        month: "long",
-        hour: "2-digit",
-        minute: "2-digit",
-      })
-    : null
+  const dateLabel = training ? formatTrainingDate(training.scheduledAt) : null
 
   return (
     <main className="mx-auto flex min-h-screen max-w-5xl flex-col gap-6 px-4 py-8">
