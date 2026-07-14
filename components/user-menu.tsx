@@ -31,7 +31,7 @@ export function UserMenu({
           {role === "organizer" ? "Organisator" : "Zuschauer"}
         </Badge>
       </div>
-      <Button variant="outline" size="icon" onClick={handleSignOut} aria-label="Abmelden">
+      <Button type="button" variant="outline" size="icon" onClick={handleSignOut} aria-label="Abmelden">
         <LogOut className="size-4" aria-hidden />
       </Button>
     </div>
