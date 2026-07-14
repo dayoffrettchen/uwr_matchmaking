@@ -1,12 +1,13 @@
 import { NextResponse } from "next/server"
 import { revalidatePath } from "next/cache"
 import { requireOrganizer } from "@/lib/auth/server"
+import { ensureNextRegularTraining } from "@/lib/training/schedule"
 import { moveSignupToTeam, resetTeams } from "@/lib/teams"
 import { assignBalancedTeams } from "@/lib/matchmaking/balance-teams"
 import { PLAYER_POSITIONS, type PlayerPosition } from "@/lib/ratings/types"
 import { db } from "@/lib/db"
 import { trainings } from "@/lib/db/schema"
-import { asc, eq, sql } from "drizzle-orm"
+import { eq } from "drizzle-orm"
 
 type TeamActionRequest = {
   action?: "generate" | "clear" | "move"
@@ -26,7 +27,7 @@ export async function POST(request: Request) {
 
     const [training] = trainingId
       ? await db.select().from(trainings).where(eq(trainings.id, trainingId)).limit(1)
-      : await db.select().from(trainings).where(sql`${trainings.isOpen} = true and ${trainings.scheduledAt} >= ${new Date()}`).orderBy(asc(trainings.scheduledAt)).limit(1)
+      : [await ensureNextRegularTraining()]
 
     if (!training) return NextResponse.json({ error: "Training nicht gefunden" }, { status: 404 })
 
