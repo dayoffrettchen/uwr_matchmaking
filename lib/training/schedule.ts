@@ -10,12 +10,14 @@ type RegularTrainingSlot = {
   title: string
   startHour: number
   startMinute: number
+  endHour: number
+  endMinute: number
   location: string
 }
 
 const REGULAR_TRAININGS: RegularTrainingSlot[] = [
-  { weekday: 1, title: "Training Montag 19:00–20:00", startHour: 19, startMinute: 0, location: "Schwimmbad" },
-  { weekday: 5, title: "Training Freitag 19:00–21:00", startHour: 19, startMinute: 0, location: "Schwimmbad" },
+  { weekday: 1, title: "Training Montag 19:00–20:00", startHour: 19, startMinute: 0, endHour: 20, endMinute: 0, location: "Schwimmbad" },
+  { weekday: 5, title: "Training Freitag 19:00–21:00", startHour: 19, startMinute: 0, endHour: 21, endMinute: 0, location: "Schwimmbad" },
 ]
 
 export function getZonedParts(date: Date) {
@@ -55,6 +57,15 @@ export function zonedDateTimeToUtcDate(year: number, month: number, day: number,
   return utcDate
 }
 
+export function getTrainingEndAt(scheduledAt: Date) {
+  const trainingDate = getZonedParts(scheduledAt)
+  const slot = REGULAR_TRAININGS.find((regularTraining) => regularTraining.weekday === new Date(Date.UTC(trainingDate.year, trainingDate.month - 1, trainingDate.day)).getUTCDay())
+
+  if (!slot) return scheduledAt
+
+  return zonedDateTimeToUtcDate(trainingDate.year, trainingDate.month, trainingDate.day, slot.endHour, slot.endMinute)
+}
+
 function getNextRegularTrainingSlot(now = new Date()) {
   const today = getZonedParts(now)
 
@@ -72,7 +83,15 @@ function getNextRegularTrainingSlot(now = new Date()) {
       slot.startMinute,
     )
 
-    if (scheduledAt.getTime() >= now.getTime()) return { ...slot, scheduledAt }
+    const endsAt = zonedDateTimeToUtcDate(
+      localDate.getUTCFullYear(),
+      localDate.getUTCMonth() + 1,
+      localDate.getUTCDate(),
+      slot.endHour,
+      slot.endMinute,
+    )
+
+    if (endsAt.getTime() >= now.getTime()) return { ...slot, scheduledAt, endsAt }
   }
 
   throw new Error("Kein regulärer Trainingstermin gefunden.")
@@ -80,15 +99,6 @@ function getNextRegularTrainingSlot(now = new Date()) {
 
 export async function ensureNextRegularTraining(now = new Date()) {
   const nextRegularTraining = getNextRegularTrainingSlot(now)
-  const existingFutureTraining = await db
-    .select()
-    .from(trainings)
-    .where(sql`${trainings.scheduledAt} >= ${now} and ${trainings.scheduledAt} <= ${nextRegularTraining.scheduledAt}`)
-    .orderBy(asc(trainings.scheduledAt))
-    .limit(1)
-
-  if (existingFutureTraining[0]) return existingFutureTraining[0]
-
   const [existingRegularTraining] = await db
     .select()
     .from(trainings)
@@ -96,6 +106,18 @@ export async function ensureNextRegularTraining(now = new Date()) {
     .limit(1)
 
   if (existingRegularTraining) return existingRegularTraining
+
+  const isUpcomingRegularTraining = nextRegularTraining.scheduledAt.getTime() >= now.getTime()
+  if (isUpcomingRegularTraining) {
+    const existingFutureTraining = await db
+      .select()
+      .from(trainings)
+      .where(sql`${trainings.scheduledAt} >= ${now} and ${trainings.scheduledAt} <= ${nextRegularTraining.scheduledAt}`)
+      .orderBy(asc(trainings.scheduledAt))
+      .limit(1)
+
+    if (existingFutureTraining[0]) return existingFutureTraining[0]
+  }
 
   const [createdTraining] = await db
     .insert(trainings)

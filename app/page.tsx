@@ -6,6 +6,7 @@ import { UserMenu } from "@/components/user-menu"
 import { AppNavigation } from "@/components/app-navigation"
 import { Card, CardContent } from "@/components/ui/card"
 import { SelfServiceTrainingActions } from "@/components/self-service-training-actions"
+import { getTrainingEndAt } from "@/lib/training/schedule"
 import { CalendarDays, Clock, MapPin, Waves } from "lucide-react"
 import { redirect } from "next/navigation"
 
@@ -31,7 +32,7 @@ export default async function Page() {
   const canManage = user.role === "organizer"
   if (user.role === "player" && currentPlayer && !currentPlayer.profileCompleted) redirect("/profil")
 
-  const trainingIsPast = training ? new Date(training.scheduledAt).getTime() < Date.now() : false
+  const trainingIsPast = training ? getTrainingEndAt(new Date(training.scheduledAt)).getTime() < Date.now() : false
   const dateLabel = training ? formatTrainingDate(training.scheduledAt) : null
 
   return (

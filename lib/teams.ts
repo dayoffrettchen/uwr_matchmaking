@@ -5,20 +5,13 @@ import { signups, trainings } from "@/lib/db/schema"
 import { PLAYER_POSITIONS, type PlayerPosition } from "@/lib/ratings/types"
 import { rebuildManualLineup } from "@/lib/matchmaking/balance-teams"
 import { ensureNextRegularTraining } from "@/lib/training/schedule"
-import { and, asc, eq, sql } from "drizzle-orm"
+import { and, eq } from "drizzle-orm"
 
 async function getOpenTraining() {
   const now = new Date()
-  await ensureNextRegularTraining(now)
+  const training = await ensureNextRegularTraining(now)
 
-  const [training] = await db
-    .select()
-    .from(trainings)
-    .where(sql`${trainings.isOpen} = true and ${trainings.scheduledAt} >= ${now}`)
-    .orderBy(asc(trainings.scheduledAt))
-    .limit(1)
-
-  return training ?? null
+  return training?.isOpen ? training : null
 }
 
 /** Randomly splits all signed-up players into two balanced-size teams. */
