@@ -2,47 +2,10 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { signOut } from "@/lib/auth/client"
+import { signOutUser } from "@/app/actions/auth"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { LogOut } from "lucide-react"
-
-type SignOutResult = Awaited<ReturnType<typeof signOut>>
-
-function getSignOutError(result: SignOutResult) {
-  if (!result) {
-    return null
-  }
-
-  const response = result as {
-    data?: { success?: boolean }
-    error?: { message?: string } | null
-  }
-
-  if (response.error) {
-    return formatSignOutError(response.error.message)
-  }
-
-  if (response.data && response.data.success === false) {
-    return "Abmeldung fehlgeschlagen."
-  }
-
-  return null
-}
-
-function formatSignOutError(message?: string) {
-  const fallback = "Abmeldung fehlgeschlagen."
-
-  if (!message) {
-    return fallback
-  }
-
-  if (message.toUpperCase().includes("INVALID ORIGIN")) {
-    return "Diese Domain ist in Neon Auth nicht freigegeben."
-  }
-
-  return message
-}
 
 export function UserMenu({
   name,
@@ -62,22 +25,12 @@ export function UserMenu({
     setSignOutError(null)
 
     try {
-      const result = await signOut({
-        callbackURL: "/sign-in",
-      } as Parameters<typeof signOut>[0] & { callbackURL: string })
-      const error = getSignOutError(result)
-
-      if (error) {
-        console.error("Sign-out failed", error)
-        setSignOutError(error)
-        return
-      }
-
+      await signOutUser()
       router.push("/sign-in")
       router.refresh()
     } catch (error) {
       console.error("Sign-out failed", error)
-      setSignOutError(formatSignOutError(error instanceof Error ? error.message : undefined))
+      setSignOutError(error instanceof Error ? error.message : "Abmeldung fehlgeschlagen.")
     } finally {
       setIsSigningOut(false)
     }
