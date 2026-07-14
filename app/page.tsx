@@ -42,7 +42,7 @@ export default async function Page() {
   if (!user) redirect("/sign-in")
 
   const canManage = user.role === "organizer"
-  if (user.role === "player" && currentPlayer && !currentPlayer.profileCompleted) redirect("/profil")
+  if (currentPlayer && !currentPlayer.profileCompleted) redirect("/profil")
 
   const trainingIsPast = training ? getTrainingEndAt(new Date(training.scheduledAt)).getTime() < Date.now() : false
   const dateLabel = training ? formatTrainingDate(training.scheduledAt, locale) : null
