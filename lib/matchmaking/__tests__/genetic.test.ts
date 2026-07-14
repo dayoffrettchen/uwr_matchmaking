@@ -92,6 +92,25 @@ describe("genetisches Matchmaking", () => {
     expect(Math.max(...goalkeeperCounts)).toBeLessThanOrEqual(3)
   })
 
+  it("liefert eine Best-Effort-Einteilung, wenn eine Zielposition pro Team unterbesetzt ist", () => {
+    const players = [
+      player(1, "F1", { forward: 1200 }, ["forward"]),
+      player(2, "F2", { forward: 1190 }, ["forward"]),
+      player(3, "F3", { forward: 1180 }, ["forward"]),
+      player(4, "F4", { forward: 1170 }, ["forward"]),
+      player(5, "F5", { forward: 1160 }, ["forward"]),
+      player(6, "F6", { forward: 1150 }, ["forward"]),
+    ]
+
+    const result = balanceMatchmakingPlayers(players, { seed: 11, maxCandidates: 200, maxGenerations: 10, maxComputationTimeMs: 0, populationSize: 16 })
+
+    expect(result.assignments).toHaveLength(players.length)
+    expect(result.assignments.filter((assignment) => assignment.team === 1)).toHaveLength(3)
+    expect(result.assignments.filter((assignment) => assignment.team === 2)).toHaveLength(3)
+    expect(result.assignments.every((assignment) => assignment.position === "forward")).toBe(true)
+    expect(result.warnings.some((warning) => warning.includes("Best-Effort"))).toBe(true)
+  })
+
   it("bewertet Präferenzen endlich und nicht eligible Positionen dominierend", () => {
     const p = player(99, "Flex", { goalkeeper: 1000, defender: 1000, forward: 1000 }, ["goalkeeper", "defender", "forward"], ["goalkeeper", "defender"])
     expect(getPositionPenalty(p, "goalkeeper")).toBe(0)
