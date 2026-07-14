@@ -7,13 +7,23 @@ import { AppNavigation } from "@/components/app-navigation"
 import { Card, CardContent } from "@/components/ui/card"
 import { SelfServiceTrainingActions } from "@/components/self-service-training-actions"
 import { getTrainingEndAt } from "@/lib/training/schedule"
-import { CalendarDays, Clock, MapPin, Waves } from "lucide-react"
+import { CalendarDays, Clock, MapPin, UserRoundCheck, Waves } from "lucide-react"
 import { redirect } from "next/navigation"
 import { getLocale } from "@/lib/i18n-server"
+import { POSITION_LABELS, type PlayerPosition } from "@/lib/ratings/types"
 
 export const dynamic = "force-dynamic"
 
 const TRAINING_START_TIME = "19:00"
+
+const TEAM_LABELS = {
+  1: "Team Blau",
+  2: "Team Weiß",
+} as const
+
+function isPlayerPosition(position: string | null | undefined): position is PlayerPosition {
+  return position === "goalkeeper" || position === "defender" || position === "forward"
+}
 
 function formatTrainingDate(scheduledAt: Date, locale: "de" | "en") {
   const date = new Date(scheduledAt).toLocaleDateString(locale === "de" ? "de-DE" : "en-US", {
@@ -36,7 +46,17 @@ export default async function Page() {
 
   const trainingIsPast = training ? getTrainingEndAt(new Date(training.scheduledAt)).getTime() < Date.now() : false
   const dateLabel = training ? formatTrainingDate(training.scheduledAt, locale) : null
-  const t = locale === "de" ? { subtitle: "Unterwasserrugby Training", schedule: "Montag 19:00–20:00 · Freitag 19:00–21:00", past: "Vergangenes Training", deadline: "Anmeldung offiziell bis 15:00, inoffiziell bis 16:00 · Einteilung jederzeit möglich", noTraining: "Aktuell ist kein Training zur Anmeldung geöffnet." } : { subtitle: "Underwater rugby training", schedule: "Monday 19:00–20:00 · Friday 19:00–21:00", past: "Past training", deadline: "Official signup until 15:00, unofficially until 16:00 · Teams can be assigned anytime", noTraining: "No training is currently open for signup." }
+  const currentAssignment = user.role === "player" && currentPlayer
+    ? roster.find((player) => player.playerId === currentPlayer.id && (player.team === 1 || player.team === 2))
+    : null
+  const assignmentTeamLabel = currentAssignment?.team === 1 || currentAssignment?.team === 2 ? TEAM_LABELS[currentAssignment.team] : null
+  const assignmentPositionLabel = isPlayerPosition(currentAssignment?.assignedPosition) ? POSITION_LABELS[currentAssignment.assignedPosition] : null
+  const assignmentLineupLabel = currentAssignment
+    ? (currentAssignment.startsInWater ?? currentAssignment.lineupType !== "substitute")
+      ? (locale === "de" ? "Start im Wasser" : "Starts in the water")
+      : (locale === "de" ? "Start draußen" : "Starts as substitute")
+    : null
+  const t = locale === "de" ? { subtitle: "Unterwasserrugby Training", schedule: "Montag 19:00–20:00 · Freitag 19:00–21:00", past: "Vergangenes Training", deadline: "Anmeldung offiziell bis 15:00, inoffiziell bis 16:00 · Einteilung jederzeit möglich", noTraining: "Aktuell ist kein Training zur Anmeldung geöffnet.", assignmentTitle: "Deine Einteilung", assignmentIntro: "Du bist für das nächste Training eingeteilt in" } : { subtitle: "Underwater rugby training", schedule: "Monday 19:00–20:00 · Friday 19:00–21:00", past: "Past training", deadline: "Official signup until 15:00, unofficially until 16:00 · Teams can be assigned anytime", noTraining: "No training is currently open for signup.", assignmentTitle: "Your assignment", assignmentIntro: "For the next training you are assigned to" }
 
   return (
     <main className="mx-auto flex min-h-screen max-w-5xl flex-col gap-6 px-4 py-8">
@@ -90,7 +110,38 @@ export default async function Page() {
         </Card>
       )}
 
-      {training && currentPlayer && (
+
+      {currentAssignment && assignmentTeamLabel && (
+        <Card className="border-primary/30 bg-primary/10">
+          <CardContent className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-3">
+              <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground">
+                <UserRoundCheck className="size-5" aria-hidden />
+              </div>
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">{t.assignmentTitle}</p>
+                <p className="text-lg font-semibold text-foreground">
+                  {t.assignmentIntro} {assignmentTeamLabel}.
+                </p>
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-2 sm:justify-end">
+              {assignmentPositionLabel && (
+                <span className="rounded-full bg-background px-3 py-1 text-sm font-medium text-foreground shadow-sm">
+                  {assignmentPositionLabel}
+                </span>
+              )}
+              {assignmentLineupLabel && (
+                <span className="rounded-full bg-background px-3 py-1 text-sm font-medium text-foreground shadow-sm">
+                  {assignmentLineupLabel}
+                </span>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {training && user.role === "player" && currentPlayer && (
         <SelfServiceTrainingActions
           locale={locale}
           trainingId={training.id}
