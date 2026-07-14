@@ -199,10 +199,10 @@ function TeamColumn({
   return (
     <div className={`min-w-0 overflow-hidden rounded-lg border bg-card transition-colors ${isDropTarget ? "border-primary bg-primary/5" : ""}`} onDragOver={onDragOver} onDragLeave={onDragLeave} onDrop={onDrop}>
       <div className={`flex flex-col gap-2 rounded-t-lg px-4 py-3 sm:flex-row sm:items-start sm:justify-between ${variant === "primary" ? "bg-primary text-primary-foreground" : "bg-accent text-accent-foreground"}`}>
-        <span className="text-lg font-semibold leading-tight">{label}</span>
+        <span className="whitespace-nowrap text-lg font-semibold leading-tight">{label}</span>
         <div className="flex flex-wrap gap-2 sm:justify-end">
-          <Badge variant="secondary">{active} im Wasser · {subs} draußen</Badge>
-          {averageRating !== null && <Badge variant="secondary">Ø MMR {averageRating}</Badge>}
+          <Badge variant="secondary" className="whitespace-nowrap">{active} im Wasser · {subs} draußen</Badge>
+          {averageRating !== null && <Badge variant="secondary" className="whitespace-nowrap">Ø MMR {averageRating}</Badge>}
         </div>
       </div>
       <div className="grid gap-3 p-3">

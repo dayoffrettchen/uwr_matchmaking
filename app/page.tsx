@@ -88,12 +88,11 @@ export default async function Page() {
       )}
 
       <div className="grid gap-6 lg:grid-cols-[1fr_1.1fr]">
-        <div className="flex flex-col gap-6">
-          <RosterPanel roster={roster} quickAddPlayers={quickAddPlayers} canManage={canManage} />
-          <TeamsPanel roster={roster} canManage={canManage} trainingId={training?.id} />
-        </div>
+        <RosterPanel roster={roster} quickAddPlayers={quickAddPlayers} canManage={canManage} />
         <MessageFeed messages={recentMessages} canManage={canManage} />
       </div>
+
+      <TeamsPanel roster={roster} canManage={canManage} trainingId={training?.id} />
     </main>
   )
 }
