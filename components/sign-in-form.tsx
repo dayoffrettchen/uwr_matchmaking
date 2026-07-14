@@ -13,7 +13,11 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 
-export function SignInForm({ hasError = false }: { hasError?: boolean }) {
+export function SignInForm({
+  hasError = false,
+}: {
+  hasError?: boolean
+}) {
   const [isLoading, setIsLoading] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(
     hasError ? "Anmeldung fehlgeschlagen. Bitte erneut versuchen." : null,
@@ -26,7 +30,9 @@ export function SignInForm({ hasError = false }: { hasError?: boolean }) {
     try {
       const result = await authClient.signIn.social({
         provider: "google",
-        callbackURL: window.location.origin,
+
+        // Wichtig: relativer Pfad statt window.location.origin
+        callbackURL: "/",
       })
 
       if (result?.error) {
@@ -64,11 +70,17 @@ export function SignInForm({ hasError = false }: { hasError?: boolean }) {
           onClick={handleGoogleSignIn}
         >
           <GoogleMark />
-          {isLoading ? "Anmeldung wird gestartet …" : "Mit Google anmelden"}
+
+          {isLoading
+            ? "Anmeldung wird gestartet …"
+            : "Mit Google anmelden"}
         </Button>
 
         {errorMessage && (
-          <p role="alert" className="text-center text-sm text-destructive">
+          <p
+            role="alert"
+            className="text-center text-sm text-destructive"
+          >
             {errorMessage}
           </p>
         )}
@@ -80,8 +92,12 @@ export function SignInForm({ hasError = false }: { hasError?: boolean }) {
 function formatAuthError(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error)
 
+  if (message.includes("INVALID_CALLBACKURL")) {
+    return "Die Rücksprungadresse für die Anmeldung wurde abgelehnt."
+  }
+
   if (message.includes("403")) {
-    return "Google-Anmeldung wurde abgelehnt (HTTP 403). Prüfe die Trusted Domain in Neon Auth."
+    return "Neon Auth hat die Google-Anmeldung abgelehnt. Bitte prüfe die Auth-Konfiguration."
   }
 
   return "Die Google-Anmeldung konnte nicht gestartet werden."
