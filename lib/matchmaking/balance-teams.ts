@@ -7,6 +7,14 @@ import { PLAYER_POSITIONS, type PlayerPosition } from "@/lib/ratings/types"
 import { getTargetLineup } from "./target-lineup"
 import type { MatchmakingAssignment, MatchmakingPlayer, MatchmakingResult, TeamSummary } from "./types"
 
+function getPreferenceOrder(player: MatchmakingPlayer, position: PlayerPosition): number {
+  const explicitOrder = player.positionPreferences.find((entry) => entry.position === position)?.order
+  if (explicitOrder) return explicitOrder
+
+  const eligibleIndex = player.eligiblePositions.indexOf(position)
+  return eligibleIndex === -1 ? PLAYER_POSITIONS.length + 1 : PLAYER_POSITIONS.length + eligibleIndex + 1
+}
+
 function summarize(playersBySignup: Map<number, MatchmakingPlayer>, assignments: MatchmakingAssignment[], team: 1 | 2): TeamSummary {
   const mine = assignments.filter((a) => a.team === team)
   const active = mine.filter((a) => a.lineupType === "active")
@@ -51,9 +59,10 @@ export function balanceMatchmakingPlayers(input: MatchmakingPlayer[]): Matchmaki
     }
     options.sort((a, b) => {
       const activeBias = a.lineupType === b.lineupType ? 0 : a.lineupType === "active" ? -100000 : 100000
+      const preferenceBias = (getPreferenceOrder(p, a.position) - getPreferenceOrder(p, b.position)) * 10000
       const slotBias = (activeCounts[a.team][a.position] - activeCounts[b.team][b.position]) * 1000
       const ratingBias = p.ratings[b.position] - p.ratings[a.position]
-      return activeBias + slotBias + ratingBias || a.team - b.team || a.position.localeCompare(b.position)
+      return activeBias + preferenceBias + slotBias + ratingBias || a.team - b.team || a.position.localeCompare(b.position)
     })
     const chosen = options[0]
     assignments.push(chosen)
