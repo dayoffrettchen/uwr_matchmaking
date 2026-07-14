@@ -12,6 +12,6 @@ export type MatchmakingPlayer = {
 }
 
 export type MatchmakingAssignment = { signupId: number; playerId: number; team: TeamNumber; position: PlayerPosition; lineupType: LineupType }
-export type TeamSummary = { activeCount: number; substituteCount: number; averageActiveRating: number; effectiveStrength: number; positionAverages: Record<PlayerPosition, number>; confidence: number }
+export type TeamSummary = { activeCount: number; substituteCount: number; averageParticipantRating: number; rotationBonus: number; effectiveStrength: number; positionAverages: Record<PlayerPosition, number>; confidence: number }
 export type MatchmakingQuality = "high" | "medium" | "low"
 export type MatchmakingResult = { assignments: MatchmakingAssignment[]; team1: TeamSummary; team2: TeamSummary; warnings: string[]; computationTimeMs: number; candidatesEvaluated: number; optimality: "exact" | "best-found"; quality: MatchmakingQuality }
