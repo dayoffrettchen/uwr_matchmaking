@@ -3,6 +3,18 @@ import { players, playerPositionRatings } from "@/lib/db/schema"
 import { asc, desc, eq, sql } from "drizzle-orm"
 import { PLAYER_POSITIONS, type PlayerPosition } from "@/lib/ratings/types"
 import { DEFAULT_RATING } from "@/lib/ratings/constants"
+import { getRatingConfidence } from "@/lib/ratings/confidence"
+
+function shouldReviewMainPosition(player: { ratings: Record<PlayerPosition, any> }) {
+  const mainPosition = PLAYER_POSITIONS.find((position) => player.ratings[position].preferenceOrder === 1)
+  if (!mainPosition) return false
+
+  const mainRating = player.ratings[mainPosition]
+  return PLAYER_POSITIONS.some((position) => {
+    const rating = player.ratings[position]
+    return position !== mainPosition && rating.isEligible && getRatingConfidence(rating.gamesPlayed) === 1 && rating.rating > mainRating.rating
+  })
+}
 
 export async function listPlayersWithRatings() {
   const rows = await db
@@ -43,6 +55,10 @@ export async function listPlayersWithRatings() {
     const aHasPosition = PLAYER_POSITIONS.some((position) => a.ratings[position].isEligible)
     const bHasPosition = PLAYER_POSITIONS.some((position) => b.ratings[position].isEligible)
 
+    const aNeedsReview = shouldReviewMainPosition(a)
+    const bNeedsReview = shouldReviewMainPosition(b)
+
+    if (aNeedsReview !== bNeedsReview) return aNeedsReview ? -1 : 1
     if (aHasPosition !== bHasPosition) return aHasPosition ? 1 : -1
 
     return a.name.localeCompare(b.name, "de")
