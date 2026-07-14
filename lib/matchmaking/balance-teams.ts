@@ -2,26 +2,27 @@ import { and, asc, eq, inArray } from "drizzle-orm"
 import { db } from "@/lib/db"
 import { players, playerPositionRatings, signups, trainings } from "@/lib/db/schema"
 import { getRatingConfidence, getRatingStatus } from "@/lib/ratings/confidence"
+import { ROTATION_BONUS_PER_SUBSTITUTE } from "@/lib/ratings/constants"
 import { PLAYER_POSITIONS, type PlayerPosition } from "@/lib/ratings/types"
 import { getTargetLineup } from "./target-lineup"
-import { scoreAssignments } from "./objective"
 import type { MatchmakingAssignment, MatchmakingPlayer, MatchmakingResult, TeamSummary } from "./types"
 
 function summarize(playersBySignup: Map<number, MatchmakingPlayer>, assignments: MatchmakingAssignment[], team: 1 | 2): TeamSummary {
   const mine = assignments.filter((a) => a.team === team)
   const active = mine.filter((a) => a.lineupType === "active")
-  const avg = (items: MatchmakingAssignment[]) => items.reduce((sum, a) => sum + playersBySignup.get(a.signupId)!.ratings[a.position], 0) / Math.max(1, items.length)
-  const averageActiveRating = Math.round(avg(active))
   const subs = mine.filter((a) => a.lineupType === "substitute")
-  const bestSub = subs.reduce((best, a) => Math.max(best, playersBySignup.get(a.signupId)!.ratings[a.position]), 0)
-  const substituteBonus = Math.max(0, bestSub - averageActiveRating) * 0.15
+  const avg = (items: MatchmakingAssignment[]) => items.reduce((sum, a) => sum + playersBySignup.get(a.signupId)!.ratings[a.position], 0) / Math.max(1, items.length)
+  const averageParticipantRating = Math.round(avg(mine))
+  const rotationBonus = subs.length * ROTATION_BONUS_PER_SUBSTITUTE
+
   return {
     activeCount: active.length,
     substituteCount: subs.length,
-    averageActiveRating,
-    effectiveStrength: Math.round(averageActiveRating + substituteBonus),
-    positionAverages: Object.fromEntries(PLAYER_POSITIONS.map((p) => [p, Math.round(avg(active.filter((a) => a.position === p)))])) as Record<PlayerPosition, number>,
-    confidence: active.reduce((sum, a) => sum + playersBySignup.get(a.signupId)!.confidence[a.position], 0) / Math.max(1, active.length),
+    averageParticipantRating,
+    rotationBonus,
+    effectiveStrength: averageParticipantRating + rotationBonus,
+    positionAverages: Object.fromEntries(PLAYER_POSITIONS.map((p) => [p, Math.round(avg(mine.filter((a) => a.position === p)))])) as Record<PlayerPosition, number>,
+    confidence: mine.reduce((sum, a) => sum + playersBySignup.get(a.signupId)!.confidence[a.position], 0) / Math.max(1, mine.length),
   }
 }
 
@@ -59,12 +60,18 @@ export function balanceMatchmakingPlayers(input: MatchmakingPlayer[]): Matchmaki
     if (chosen.lineupType === "active") { teamActive[chosen.team]++; activeCounts[chosen.team][chosen.position]++ }
     candidatesEvaluated += options.length
   }
-  // move strongest substitute to weaker effective team for odd counts
   const bySignup = new Map(players.map((p) => [p.signupId, p]))
-  const team1 = summarize(bySignup, assignments, 1), team2 = summarize(bySignup, assignments, 2)
-  for (const sub of assignments.filter((a) => a.lineupType === "substitute")) sub.team = team1.averageActiveRating <= team2.averageActiveRating ? 1 : 2
+  for (const sub of assignments.filter((a) => a.lineupType === "substitute")) {
+    const originalTeam = sub.team
+    sub.team = 1
+    const team1SubDiff = Math.abs(summarize(bySignup, assignments, 1).effectiveStrength - summarize(bySignup, assignments, 2).effectiveStrength)
+    sub.team = 2
+    const team2SubDiff = Math.abs(summarize(bySignup, assignments, 1).effectiveStrength - summarize(bySignup, assignments, 2).effectiveStrength)
+    sub.team = team1SubDiff <= team2SubDiff ? 1 : 2
+    if (team1SubDiff === team2SubDiff) sub.team = originalTeam
+  }
   const finalTeam1 = summarize(bySignup, assignments, 1), finalTeam2 = summarize(bySignup, assignments, 2)
-  const diff = Math.abs(finalTeam1.averageActiveRating - finalTeam2.averageActiveRating)
+  const diff = Math.abs(finalTeam1.effectiveStrength - finalTeam2.effectiveStrength)
   const unstable = assignments.filter((a) => getRatingStatus(bySignup.get(a.signupId)!.gamesPlayed[a.position]) !== "established").length
   const quality = warnings.length || diff > 80 ? "low" : diff > 25 || unstable > assignments.length / 3 ? "medium" : "high"
   return { assignments, team1: finalTeam1, team2: finalTeam2, warnings, computationTimeMs: Date.now() - started, candidatesEvaluated, optimality: candidatesEvaluated > 10000 ? "best-found" : "exact", quality }

@@ -1,3 +1,15 @@
 export const DEFAULT_RATING = 1000
 export const MINIMUM_RATING = 100
 export const INITIAL_RATING_OPTIONS = [800, 900, 1000, 1100, 1200] as const
+
+export const ROTATION_BONUS_PER_SUBSTITUTE = 30
+
+export const MAX_RATING_GOAL_DIFFERENCE = 8
+export const MARGIN_LOG_FACTOR = 0.35
+export const DOMINANCE_BASE_FACTOR = 0.75
+export const DOMINANCE_RATIO_FACTOR = 0.5
+export const FAVORITE_ADJUSTMENT_STRENGTH = 1.2
+export const MIN_FAVORITE_FACTOR = 0.6
+export const MAX_FAVORITE_FACTOR = 1.4
+export const MAX_MARGIN_MULTIPLIER = 2.25
+export const MAX_RATING_DELTA_IN_K_FACTORS = 1.5
