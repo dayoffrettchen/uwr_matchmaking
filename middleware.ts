@@ -1,6 +1,19 @@
+import type { NextRequest } from "next/server"
+import { NextResponse } from "next/server"
 import { auth } from "@/lib/auth/server"
 
-export default auth.middleware({ loginUrl: "/sign-in" })
+const authMiddleware = auth.middleware({ loginUrl: "/sign-in" })
+
+export default function middleware(request: NextRequest) {
+  // React server actions are POSTed back to the current route. Let the action
+  // execute so its own server-side guard can read the session and return the
+  // German form error instead of the middleware converting the POST to /sign-in.
+  if (request.method === "POST" && request.headers.has("next-action")) {
+    return NextResponse.next()
+  }
+
+  return authMiddleware(request)
+}
 
 export const config = {
   // Run on the Node.js runtime so the auth module can use Node built-ins (crypto).
