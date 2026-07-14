@@ -61,10 +61,13 @@ export async function signUpPlayer(opts: {
     return { ok: true as const, alreadySignedUp: true, training, player }
   }
 
-  await db.insert(signups).values({
-    trainingId: training.id,
-    playerId: player.id,
-    source: opts.source ?? "app",
+  await db.transaction(async (tx) => {
+    await tx.insert(signups).values({
+      trainingId: training.id,
+      playerId: player.id,
+      source: opts.source ?? "app",
+    })
+    await tx.update(signups).set({ team: null, assignedPosition: null, lineupType: null, rotationGroupId: null, rotationGroupType: null, rotationOrder: null, startsInWater: null }).where(eq(signups.trainingId, training.id))
   })
 
   return { ok: true as const, alreadySignedUp: false, training, player }

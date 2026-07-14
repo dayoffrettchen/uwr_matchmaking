@@ -187,7 +187,7 @@ function TeamColumn({
   onDragLeave: () => void
   onDrop: (event: DragEvent<HTMLDivElement>) => void
 }) {
-  const active = players.filter((p) => p.lineupType !== "substitute").length
+  const active = players.filter((p) => p.startsInWater ?? p.lineupType !== "substitute").length
   const subs = players.length - active
   const ratedPlayers = players.filter((p) => typeof p.assignedRating === "number")
   const averageRating = ratedPlayers.length > 0 ? Math.round(ratedPlayers.reduce((sum, player) => sum + player.assignedRating!, 0) / ratedPlayers.length) : null
@@ -197,36 +197,63 @@ function TeamColumn({
       <div className={`flex items-center justify-between rounded-t-lg px-4 py-2 ${variant === "primary" ? "bg-primary text-primary-foreground" : "bg-accent text-accent-foreground"}`}>
         <span className="font-semibold">{label}</span>
         <div className="flex flex-wrap justify-end gap-2">
-          <Badge variant="secondary">{active} aktiv · {subs} Wechsel</Badge>
+          <Badge variant="secondary">{active} im Wasser · {subs} draußen</Badge>
           {averageRating !== null && <Badge variant="secondary">Ø MMR {averageRating}</Badge>}
         </div>
       </div>
       <div className="grid gap-3 p-3">
-        {PLAYER_POSITIONS.map((position) => {
-          const positionedPlayers = players.filter((p) => p.assignedPosition === position)
-
-          return (
-            <section key={position}>
-              <h3 className="text-sm font-semibold text-muted-foreground">{POSITION_LABELS[position]}</h3>
-              <ul className="mt-1 divide-y rounded-md border">
-                {positionedPlayers.map((p) => (
-                  <li key={p.signupId} className={`flex items-center justify-between gap-3 px-3 py-2 text-sm ${movingSignupId === p.signupId ? "opacity-60" : ""}`} draggable={canManage} onDragStart={(event) => { event.dataTransfer.effectAllowed = "move"; event.dataTransfer.setData("text/plain", String(p.signupId)); onDragStart(p.signupId) }} onDragEnd={onDragEnd}>
-                    <span className="flex items-center gap-2">
-                      {canManage && <GripVertical className="size-4 shrink-0 text-muted-foreground" aria-hidden />}
-                      {p.name}
-                    </span>
-                    <span className="flex flex-wrap justify-end gap-2">
-                      {typeof p.assignedRating === "number" && <Badge variant="outline">MMR {p.assignedRating}</Badge>}
-                      {p.lineupType === "substitute" && <Badge variant="secondary">Wechsel</Badge>}
-                    </span>
-                  </li>
-                ))}
-                {positionedPlayers.length === 0 && <li className="px-3 py-2 text-sm text-muted-foreground">Leer</li>}
-              </ul>
-            </section>
-          )
-        })}
+        {PLAYER_POSITIONS.map((position) => <PositionGroups key={position} position={position} players={players.filter((p) => p.assignedPosition === position)} canManage={canManage} movingSignupId={movingSignupId} onDragStart={onDragStart} onDragEnd={onDragEnd} />)}
       </div>
+    </div>
+  )
+}
+
+function PositionGroups({ position, players, canManage, movingSignupId, onDragStart, onDragEnd }: { position: PlayerPosition; players: RosterPlayer[]; canManage: boolean; movingSignupId: number | null; onDragStart: (signupId: number) => void; onDragEnd: () => void }) {
+  const grouped = new Map<number, RosterPlayer[]>()
+  for (const player of players) grouped.set(player.rotationGroupId ?? player.signupId, [...(grouped.get(player.rotationGroupId ?? player.signupId) ?? []), player])
+
+  return (
+    <section>
+      <h3 className="text-sm font-semibold text-muted-foreground">{POSITION_LABELS[position]}</h3>
+      <div className="mt-1 grid gap-2">
+        {players.length === 0 && <div className="rounded-md border px-3 py-2 text-sm text-muted-foreground">Leer</div>}
+        {Array.from(grouped.entries()).map(([groupId, members]) => (
+          <RotationGroupCard key={groupId} groupId={groupId} members={members.sort((a, b) => (a.rotationOrder ?? 0) - (b.rotationOrder ?? 0))} canManage={canManage} movingSignupId={movingSignupId} onDragStart={onDragStart} onDragEnd={onDragEnd} />
+        ))}
+      </div>
+    </section>
+  )
+}
+
+function RotationGroupCard({ groupId, members, canManage, movingSignupId, onDragStart, onDragEnd }: { groupId: number; members: RosterPlayer[]; canManage: boolean; movingSignupId: number | null; onDragStart: (signupId: number) => void; onDragEnd: () => void }) {
+  const type = members[0]?.rotationGroupType ?? "single"
+  const label = type === "triple" ? "Dreier-Wechselgruppe" : type === "pair" ? "Zweierwechsel" : "Einzelbesetzung"
+  const starters = members.filter((member) => member.startsInWater ?? member.lineupType !== "substitute")
+  const waiting = members.filter((member) => !(member.startsInWater ?? member.lineupType !== "substitute"))
+
+  return (
+    <div className="rounded-md border px-3 py-2 text-sm">
+      <div className="flex items-center justify-between gap-2">
+        <span className="font-medium">{label} {groupId}</span>
+        <Badge variant="secondary">Start: {starters.map((p) => p.name).join(" + ") || "—"}</Badge>
+      </div>
+      {waiting.length > 0 && <p className="mt-1 text-muted-foreground">Draußen: {waiting.map((p) => p.name).join(" + ")}</p>}
+      <ol className="mt-2 grid gap-1">
+        {members.map((p) => (
+          <li key={p.signupId} className={`flex items-center justify-between gap-3 ${movingSignupId === p.signupId ? "opacity-60" : ""}`} draggable={canManage} onDragStart={(event) => { event.dataTransfer.effectAllowed = "move"; event.dataTransfer.setData("text/plain", String(p.signupId)); onDragStart(p.signupId) }} onDragEnd={onDragEnd}>
+            <span className="flex items-center gap-2">
+              {canManage && <GripVertical className="size-4 shrink-0 text-muted-foreground" aria-hidden />}
+              {p.rotationOrder ?? "–"}. {p.name}
+            </span>
+            <span className="flex flex-wrap justify-end gap-2">
+              {p.startsInWater ?? p.lineupType !== "substitute" ? <Badge variant="outline">im Wasser</Badge> : <Badge variant="secondary">draußen</Badge>}
+              {canManage && typeof p.assignedRating === "number" && <Badge variant="outline">MMR {p.assignedRating}</Badge>}
+            </span>
+          </li>
+        ))}
+      </ol>
+      {type === "pair" && <p className="mt-2 text-muted-foreground">Wechsel: {members.map((p) => p.name).join(" ↔ ")}</p>}
+      {type === "triple" && <p className="mt-2 text-muted-foreground">Rotation: {members.map((p, index) => `${p.name} rein → ${members[(index + members.length - 2) % members.length]?.name} raus`).join(" · ")}</p>}
     </div>
   )
 }

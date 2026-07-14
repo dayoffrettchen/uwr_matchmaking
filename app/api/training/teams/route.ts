@@ -9,6 +9,8 @@ type TeamActionRequest = {
   signupId?: number
   team?: number
   trainingId?: number
+  signupId?: number
+  team?: 1 | 2
 }
 
 export async function POST(request: Request) {

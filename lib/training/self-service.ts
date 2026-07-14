@@ -18,7 +18,7 @@ async function requireOpenTraining(trainingId: number) {
 async function resetCurrentLineup(trainingId: number, tx: Pick<typeof db, "update"> = db) {
   await tx
     .update(signups)
-    .set({ team: null, assignedPosition: null, lineupType: null })
+    .set({ team: null, assignedPosition: null, lineupType: null, rotationGroupId: null, rotationGroupType: null, rotationOrder: null, startsInWater: null })
     .where(eq(signups.trainingId, trainingId))
 }
 

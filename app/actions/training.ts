@@ -39,6 +39,10 @@ export async function getDashboardData() {
       team: signups.team,
       assignedPosition: signups.assignedPosition,
       lineupType: signups.lineupType,
+      rotationGroupId: signups.rotationGroupId,
+      rotationGroupType: signups.rotationGroupType,
+      rotationOrder: signups.rotationOrder,
+      startsInWater: signups.startsInWater,
       source: signups.source,
       createdAt: signups.createdAt,
     })

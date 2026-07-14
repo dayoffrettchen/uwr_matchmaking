@@ -34,6 +34,10 @@ export async function createMatchDraftAction(formData: FormData) {
       team: signups.team,
       position: signups.assignedPosition,
       lineupType: signups.lineupType,
+      rotationGroupId: signups.rotationGroupId,
+      rotationGroupType: signups.rotationGroupType,
+      rotationOrder: signups.rotationOrder,
+      startsInWater: signups.startsInWater,
     })
     .from(signups)
     .innerJoin(players, eq(players.id, signups.playerId))
@@ -58,6 +62,10 @@ export async function createMatchDraftAction(formData: FormData) {
         team: player.team!,
         position: player.position!,
         lineupType: player.lineupType ?? "active",
+        rotationGroupId: player.rotationGroupId,
+        rotationGroupType: player.rotationGroupType,
+        rotationOrder: player.rotationOrder,
+        startsInWater: player.startsInWater,
       })),
     )
   })
