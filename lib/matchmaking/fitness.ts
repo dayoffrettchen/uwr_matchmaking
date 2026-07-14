@@ -2,6 +2,7 @@ import { getRatingStatus } from "@/lib/ratings/confidence"
 import { PLAYER_POSITIONS, type PlayerPosition } from "@/lib/ratings/types"
 import { MAX_ACTIVE_PLAYERS_PER_TEAM, OBJECTIVE_WEIGHTS } from "./constants"
 import { completeAssignments, summarize } from "./balance-teams"
+import { getTargetLineup } from "./target-lineup"
 import { toDraftAssignments, type Candidate } from "./candidate"
 import type { MatchmakingAssignment, MatchmakingPlayer, MatchmakingResult, RotationGroup, TeamSummary } from "./types"
 
@@ -14,6 +15,7 @@ export type FitnessBreakdown = {
   substituteAdvantagePenalty: number
   rotationSpreadPenalty: number
   rotationMatchPenalty: number
+  positionCrowdingPenalty: number
   preferencePenalty: number
   confidencePenalty: number
   unratedPlayerPenalty: number
@@ -82,6 +84,15 @@ export function evaluateCandidate(players: MatchmakingPlayer[], candidate: Candi
     const b = rotationGroups.filter((g) => g.team === 2 && g.position === p).reduce((s, g) => s + g.effectiveRating * g.activeSlotCount, 0)
     return sum + Math.abs(a - b)
   }, 0)
+  const availability = Object.fromEntries(PLAYER_POSITIONS.map((p) => [p, players.filter((player) => player.eligiblePositions.includes(p)).length])) as Record<PlayerPosition, number>
+  const target = getTargetLineup(MAX_ACTIVE_PLAYERS_PER_TEAM, availability)
+  const positionCrowdingPenalty = PLAYER_POSITIONS.reduce((sum, p) => {
+    const team1PositionCount = assignments.filter((a) => a.team === 1 && a.position === p).length
+    const team2PositionCount = assignments.filter((a) => a.team === 2 && a.position === p).length
+    const preferredMax = target[p] + 1
+    const excess = Math.max(0, team1PositionCount - preferredMax) + Math.max(0, team2PositionCount - preferredMax)
+    return sum + Math.abs(team1PositionCount - team2PositionCount) + excess * excess * 4
+  }, 0)
   const preferencePenalty = assignments.reduce((sum, a) => sum + getPositionPenalty(bySignup.get(a.signupId)!, a.position), 0)
   const confidencePenalty = Math.abs(team1.confidence - team2.confidence)
   const unratedPlayerPenalty = Math.abs(assignments.filter((a) => a.team === 1 && getRatingStatus(bySignup.get(a.signupId)!.gamesPlayed[a.position]) !== "established").length - assignments.filter((a) => a.team === 2 && getRatingStatus(bySignup.get(a.signupId)!.gamesPlayed[a.position]) !== "established").length)
@@ -94,11 +105,12 @@ export function evaluateCandidate(players: MatchmakingPlayer[], candidate: Candi
     + substituteAdvantagePenalty * OBJECTIVE_WEIGHTS.substituteAdvantagePenalty
     + rotationSpreadPenalty * OBJECTIVE_WEIGHTS.rotationSpread
     + rotationMatchPenalty * OBJECTIVE_WEIGHTS.rotationGroupMatchDifference
+    + positionCrowdingPenalty * OBJECTIVE_WEIGHTS.positionCrowdingPenalty
     + preferencePenalty * OBJECTIVE_WEIGHTS.positionPreference
     + confidencePenalty * OBJECTIVE_WEIGHTS.confidenceDifference
     + unratedPlayerPenalty * OBJECTIVE_WEIGHTS.unratedPlayerDifference
   const safeTotal = Number.isFinite(total) ? total : 1_000_000_000_000
-  const fitness = { effectiveStrengthDifference, startingLineupDifference, positionStrengthDifference, targetLineupPenalty, activePlayerDifference, substituteAdvantagePenalty, rotationSpreadPenalty, rotationMatchPenalty, preferencePenalty, confidencePenalty, unratedPlayerPenalty, hardViolations, total: safeTotal }
+  const fitness = { effectiveStrengthDifference, startingLineupDifference, positionStrengthDifference, targetLineupPenalty, activePlayerDifference, substituteAdvantagePenalty, rotationSpreadPenalty, rotationMatchPenalty, positionCrowdingPenalty, preferencePenalty, confidencePenalty, unratedPlayerPenalty, hardViolations, total: safeTotal }
   return { assignments, rotationGroups, team1, team2, warnings, computationTimeMs: 0, candidatesEvaluated: 1, optimality: "best-found", quality: "medium", fitness, candidate, hash }
 }
 

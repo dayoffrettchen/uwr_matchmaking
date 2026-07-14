@@ -27,6 +27,7 @@ export const OBJECTIVE_WEIGHTS = {
   unratedPlayerDifference: 30,
   substituteAdvantagePenalty: 10,
   rotationGroupMatchDifference: ROTATION_GROUP_MATCH_WEIGHT,
+  positionCrowdingPenalty: 50_000,
   rotationSpread: ROTATION_SPREAD_WEIGHT,
   positionPreference: POSITION_PREFERENCE_WEIGHT,
 } as const

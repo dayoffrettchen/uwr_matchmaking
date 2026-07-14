@@ -60,6 +60,32 @@ describe("genetisches Matchmaking", () => {
     expect(a.assignments.map((x) => [x.signupId, x.team, x.position, x.rotationGroupId, x.startsInWater])).toEqual(b.assignments.map((x) => [x.signupId, x.team, x.position, x.rotationGroupId, x.startsInWater]))
   })
 
+
+  it("verteilt zusätzliche Wechselspieler einer Position auf beide Teams", () => {
+    const players = [
+      player(1, "G1", { goalkeeper: 1100 }, ["goalkeeper"]),
+      player(2, "G2", { goalkeeper: 1090 }, ["goalkeeper"]),
+      player(3, "G3", { goalkeeper: 1080 }, ["goalkeeper"]),
+      player(4, "G4", { goalkeeper: 1070 }, ["goalkeeper"]),
+      player(5, "G5", { goalkeeper: 1060 }, ["goalkeeper"]),
+      player(6, "G6", { goalkeeper: 1050 }, ["goalkeeper"]),
+      player(7, "D1", { defender: 1100 }, ["defender"]),
+      player(8, "D2", { defender: 1090 }, ["defender"]),
+      player(9, "D3", { defender: 1080 }, ["defender"]),
+      player(10, "D4", { defender: 1070 }, ["defender"]),
+      player(11, "F1", { forward: 1100 }, ["forward"]),
+      player(12, "F2", { forward: 1090 }, ["forward"]),
+      player(13, "F3", { forward: 1080 }, ["forward"]),
+      player(14, "F4", { forward: 1070 }, ["forward"]),
+    ]
+
+    const result = balanceMatchmakingPlayers(players, { seed: 21, maxCandidates: 1200, maxGenerations: 30, maxComputationTimeMs: 0, populationSize: 32 })
+    const goalkeeperCounts = [1, 2].map((team) => result.assignments.filter((a) => a.team === team && a.position === "goalkeeper").length)
+
+    expect(Math.abs(goalkeeperCounts[0] - goalkeeperCounts[1])).toBeLessThanOrEqual(1)
+    expect(Math.max(...goalkeeperCounts)).toBeLessThanOrEqual(3)
+  })
+
   it("bewertet Präferenzen endlich und nicht eligible Positionen dominierend", () => {
     const p = player(99, "Flex", { goalkeeper: 1000, defender: 1000, forward: 1000 }, ["goalkeeper", "defender", "forward"], ["goalkeeper", "defender"])
     expect(getPositionPenalty(p, "goalkeeper")).toBe(0)
