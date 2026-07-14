@@ -1,6 +1,7 @@
 "use client"
 
-import { useTransition } from "react"
+import { useState, useTransition } from "react"
+import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -14,12 +15,43 @@ type RosterPlayer = {
   source: string
 }
 
+type TeamAction = "generate" | "clear"
+
 export function TeamsPanel({ roster, canManage }: { roster: RosterPlayer[]; canManage: boolean }) {
+  const router = useRouter()
   const [isPending, startTransition] = useTransition()
+  const [pendingAction, setPendingAction] = useState<TeamAction | null>(null)
+  const [error, setError] = useState<string | null>(null)
 
   const teamsAssigned = roster.some((p) => p.team !== null)
   const team1 = roster.filter((p) => p.team === 1)
   const team2 = roster.filter((p) => p.team === 2)
+  const isMutating = isPending || pendingAction !== null
+
+  async function runTeamAction(action: TeamAction) {
+    setPendingAction(action)
+    setError(null)
+
+    try {
+      if (action === "generate") {
+        await generateTeams()
+      } else {
+        await clearTeams()
+      }
+
+      startTransition(() => {
+        router.refresh()
+      })
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Die Team-Aktion ist fehlgeschlagen. Bitte versuche es erneut.",
+      )
+    } finally {
+      setPendingAction(null)
+    }
+  }
 
   return (
     <Card>
@@ -34,25 +66,30 @@ export function TeamsPanel({ roster, canManage }: { roster: RosterPlayer[]; canM
               <Button
                 variant="ghost"
                 size="sm"
-                disabled={isPending}
-                onClick={() => startTransition(() => clearTeams())}
+                disabled={isMutating}
+                onClick={() => void runTeamAction("clear")}
               >
                 <X className="size-4" aria-hidden />
-                Zurücksetzen
+                {pendingAction === "clear" ? "Setze zurück …" : "Zurücksetzen"}
               </Button>
             )}
             <Button
               size="sm"
-              disabled={isPending || roster.length < 2}
-              onClick={() => startTransition(() => generateTeams())}
+              disabled={isMutating || roster.length < 2}
+              onClick={() => void runTeamAction("generate")}
             >
               <Shuffle className="size-4" aria-hidden />
-              Auslosen
+              {pendingAction === "generate" ? "Lose aus …" : "Auslosen"}
             </Button>
           </div>
         )}
       </CardHeader>
       <CardContent>
+        {error && (
+          <p className="mb-4 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+            {error}
+          </p>
+        )}
         {!teamsAssigned ? (
           <p className="text-sm text-muted-foreground text-pretty">
             {roster.length < 2
