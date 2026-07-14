@@ -43,6 +43,8 @@ export function RosterPanel({ roster, canManage }: { roster: RosterPlayer[]; can
 
         form.reset()
         router.refresh()
+        await addPlayerToTraining(formData)
+        form.reset()
       } catch (err) {
         setError(err instanceof Error ? err.message : "Spieler konnte nicht hinzugefügt werden.")
       }
@@ -67,6 +69,7 @@ export function RosterPanel({ roster, canManage }: { roster: RosterPlayer[]; can
         }
 
         router.refresh()
+        await removeSignup(signupId)
       } catch (err) {
         setError(err instanceof Error ? err.message : "Anmeldung konnte nicht entfernt werden.")
       }

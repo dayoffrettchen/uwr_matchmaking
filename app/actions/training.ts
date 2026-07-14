@@ -42,3 +42,53 @@ export async function getDashboardData() {
 
   return { user, training, roster, recentMessages: recentMessages.reverse() }
 }
+
+export async function addPlayerToTraining(formData: FormData) {
+  await requireOrganizer()
+  const name = String(formData.get("name") ?? "").trim()
+  if (!name) return
+  await signUpPlayer({ name, source: "app" })
+  revalidatePath("/")
+}
+
+export async function removeSignup(signupId: number) {
+  await requireOrganizer()
+  await db.delete(signups).where(eq(signups.id, signupId))
+  revalidatePath("/")
+}
+
+export async function generateTeams() {
+  await requireOrganizer()
+  await assignRandomTeams()
+  revalidatePath("/")
+}
+
+export async function clearTeams() {
+  await requireOrganizer()
+  await resetTeams()
+  revalidatePath("/")
+}
+
+/** Simulate an incoming WhatsApp message (useful before the real webhook is wired up). */
+export async function simulateMessage(formData: FormData) {
+  await requireOrganizer()
+  const name = String(formData.get("name") ?? "").trim()
+  const body = String(formData.get("body") ?? "").trim()
+  if (!name || !body) return
+
+  const { isPresentMessage, logMessage } = await import("@/lib/signup")
+  const matched = isPresentMessage(body)
+
+  if (matched) {
+    const result = await signUpPlayer({ name, source: "whatsapp" })
+    await logMessage({
+      trainingId: result.ok ? result.training.id : null,
+      playerName: name,
+      body,
+      matched: true,
+    })
+  } else {
+    await logMessage({ playerName: name, body, matched: false })
+  }
+  revalidatePath("/")
+}

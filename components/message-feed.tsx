@@ -47,6 +47,8 @@ export function MessageFeed({ messages, canManage }: { messages: Msg[]; canManag
 
         form.reset()
         router.refresh()
+        await simulateMessage(formData)
+        form.reset()
       } catch (err) {
         setError(err instanceof Error ? err.message : "Nachricht konnte nicht gesendet werden.")
       }
