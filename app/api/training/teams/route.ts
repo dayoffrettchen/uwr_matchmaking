@@ -25,6 +25,8 @@ export async function POST(request: Request) {
       await assignBalancedTeams(trainingId)
     } else if (body?.action === "clear") {
       await resetTeams(trainingId)
+    } else if (body?.action === "move" && Number.isInteger(body.signupId) && (body.team === 1 || body.team === 2)) {
+      await moveSignupToTeam({ signupId: Number(body.signupId), team: body.team, trainingId })
     } else if (body?.action === "move") {
       if (!Number.isInteger(body.signupId) || (body.team !== 1 && body.team !== 2)) {
         return NextResponse.json({ error: "Ungültige Team-Zuordnung" }, { status: 400 })

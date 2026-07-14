@@ -66,15 +66,3 @@ export async function resetTeams(trainingId?: number) {
 
   await db.update(signups).set({ team: null, assignedPosition: null, lineupType: null, rotationGroupId: null, rotationGroupType: null, rotationOrder: null, startsInWater: null }).where(eq(signups.trainingId, training.id))
 }
-
-export async function moveSignupToTeam({ signupId, team, trainingId }: { signupId: number; team: 1 | 2; trainingId?: number }) {
-  const training = trainingId
-    ? (await db.select().from(trainings).where(eq(trainings.id, trainingId)).limit(1))[0]
-    : await getOpenTraining()
-  if (!training) return
-
-  await db
-    .update(signups)
-    .set({ team })
-    .where(and(eq(signups.id, signupId), eq(signups.trainingId, training.id)))
-}

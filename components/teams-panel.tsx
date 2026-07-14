@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { POSITION_LABELS, PLAYER_POSITIONS } from "@/lib/ratings/types"
+import { POSITION_LABELS, PLAYER_POSITIONS, type PlayerPosition } from "@/lib/ratings/types"
 import { GripVertical, Shuffle, Users, X } from "lucide-react"
 
 type RosterPlayer = {
@@ -17,6 +17,10 @@ type RosterPlayer = {
   assignedPosition?: string | null
   lineupType?: string | null
   assignedRating?: number | null
+  rotationGroupId?: number | null
+  rotationGroupType?: string | null
+  rotationOrder?: number | null
+  startsInWater?: boolean | null
 }
 
 type TeamAction = "generate" | "clear"
@@ -112,7 +116,7 @@ export function TeamsPanel({ roster, canManage, trainingId }: { roster: RosterPl
           </p>
         ) : (
           <>
-            {canManage && <p className="mb-3 text-sm text-muted-foreground">Ziehe Spieler per Drag-and-drop in das andere Team, um die Einteilung manuell anzupassen.</p>}
+            {canManage && <p className="mb-3 text-sm text-muted-foreground">Ziehe Spieler per Drag-and-drop in das andere Team, um die Einteilung manuell anzupassen. Danach sollte die faire Einteilung neu berechnet werden.</p>}
             <div className="grid gap-4 sm:grid-cols-2">
               <TeamColumn
                 label="Team 1"
