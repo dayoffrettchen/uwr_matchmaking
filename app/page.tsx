@@ -5,6 +5,7 @@ import { MessageFeed } from "@/components/message-feed"
 import { UserMenu } from "@/components/user-menu"
 import { AppNavigation } from "@/components/app-navigation"
 import { Card, CardContent } from "@/components/ui/card"
+import { SelfServiceTrainingActions } from "@/components/self-service-training-actions"
 import { CalendarDays, Clock, MapPin, Waves } from "lucide-react"
 import { redirect } from "next/navigation"
 
@@ -23,11 +24,13 @@ function formatTrainingDate(scheduledAt: Date) {
 }
 
 export default async function Page() {
-  const { user, training, roster, quickAddPlayers, recentMessages } = await getDashboardData()
+  const { user, training, roster, quickAddPlayers, recentMessages, currentPlayer } = await getDashboardData()
 
   if (!user) redirect("/sign-in")
 
   const canManage = user.role === "organizer"
+  if (user.role === "player" && currentPlayer && !currentPlayer.profileCompleted) redirect("/profil")
+
   const trainingIsPast = training ? new Date(training.scheduledAt).getTime() < Date.now() : false
 
   const dateLabel = training ? formatTrainingDate(training.scheduledAt) : null
@@ -46,7 +49,7 @@ export default async function Page() {
         </div>
         <UserMenu name={user.name} email={user.email} role={user.role} />
       </header>
-      <AppNavigation />
+      <AppNavigation role={user.role} />
 
       {training ? (
         <Card className="bg-primary text-primary-foreground">
@@ -66,6 +69,9 @@ export default async function Page() {
               <Clock className="size-4" aria-hidden />
               Montag 19:00–20:00 · Freitag 19:00–21:00
             </span>
+            {user.role === "player" && currentPlayer && (
+              <SelfServiceTrainingActions trainingId={training.id} isOpen={training.isOpen} isSignedUp={roster.some((player) => player.playerId === currentPlayer.id)} />
+            )}
             {trainingIsPast && (
               <span className="rounded-full bg-primary-foreground/15 px-2 py-0.5 text-xs font-medium">
                 Vergangenes Training · Aufstellung weiterhin möglich
@@ -76,7 +82,7 @@ export default async function Page() {
       ) : (
         <Card>
           <CardContent className="py-6 text-center text-muted-foreground">
-            Kein offenes Training. Lege eins in der Datenbank an.
+            Aktuell ist kein Training zur Anmeldung geöffnet.
           </CardContent>
         </Card>
       )}

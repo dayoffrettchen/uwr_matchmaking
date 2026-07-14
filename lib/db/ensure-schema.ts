@@ -5,7 +5,23 @@ import { pool } from "@/lib/db"
 let schemaReady: Promise<void> | null = null
 
 const SCHEMA_STATEMENTS = [
-  "ALTER TABLE players ADD COLUMN IF NOT EXISTS initial_rating_configured boolean NOT NULL DEFAULT false",
+
+  "ALTER TABLE players ADD COLUMN IF NOT EXISTS auth_user_id text",
+  "ALTER TABLE players ADD COLUMN IF NOT EXISTS email text",
+  "ALTER TABLE players ADD COLUMN IF NOT EXISTS profile_completed boolean NOT NULL DEFAULT false",
+  "ALTER TABLE players ADD COLUMN IF NOT EXISTS notes text",
+  "ALTER TABLE players ADD COLUMN IF NOT EXISTS updated_at timestamptz NOT NULL DEFAULT now()",
+  "CREATE UNIQUE INDEX IF NOT EXISTS players_auth_user_id_unique ON players (auth_user_id)",
+  "CREATE UNIQUE INDEX IF NOT EXISTS players_email_unique ON players (email)",
+  `CREATE TABLE IF NOT EXISTS player_position_preferences (
+    id serial PRIMARY KEY,
+    player_id integer NOT NULL,
+    position text NOT NULL,
+    preference_order integer NOT NULL,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    CONSTRAINT player_position_preferences_player_position_unique UNIQUE (player_id, position)
+  )`,  "ALTER TABLE players ADD COLUMN IF NOT EXISTS initial_rating_configured boolean NOT NULL DEFAULT false",
   `CREATE TABLE IF NOT EXISTS player_position_ratings (
     id serial PRIMARY KEY,
     player_id integer NOT NULL,

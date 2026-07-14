@@ -53,10 +53,10 @@ export function SignInForm({
           <Waves className="size-6" aria-hidden />
         </div>
 
-        <CardTitle className="text-xl">UWR Matchmaking</CardTitle>
+        <CardTitle className="text-xl">Mit Google anmelden</CardTitle>
 
         <CardDescription>
-          Melde dich an, um Trainings und Teams zu sehen.
+          Melde dich mit deinem Google-Konto an, um dein Spielerprofil zu verwalten und dich zu Trainings anzumelden.
         </CardDescription>
       </CardHeader>
 

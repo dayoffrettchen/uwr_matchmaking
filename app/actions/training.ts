@@ -3,12 +3,15 @@
 import { db } from "@/lib/db"
 import { messages, playerPositionRatings, players, signups, trainings } from "@/lib/db/schema"
 import { getSessionUser } from "@/lib/auth/server"
+import { ensureCurrentPlayerProfile } from "@/lib/players/ensure-profile"
 import { ensureDatabaseSchema } from "@/lib/db/ensure-schema"
 import { asc, desc, eq, inArray, sql } from "drizzle-orm"
 
 export async function getDashboardData() {
   const user = await getSessionUser()
   await ensureDatabaseSchema()
+
+  const currentPlayer = user?.role === "player" ? await ensureCurrentPlayerProfile(user) : null
 
   const [openTraining] = await db
     .select()
@@ -24,7 +27,7 @@ export async function getDashboardData() {
   const training = latestTraining ?? null
 
   if (!training) {
-    return { user, training: null, roster: [], quickAddPlayers: [], recentMessages: [] }
+    return { user, training: null, roster: [], quickAddPlayers: [], recentMessages: [], currentPlayer }
   }
 
   const roster = await db
@@ -80,7 +83,8 @@ export async function getDashboardData() {
 
   const rosterWithRatings = roster.map((player) => ({
     ...player,
-    assignedRating: player.assignedPosition
+    phone: user?.role === "organizer" ? player.phone : null,
+    assignedRating: user?.role === "organizer" && player.assignedPosition
       ? (ratingsByPlayerAndPosition.get(`${player.playerId}:${player.assignedPosition}`) ?? null)
       : null,
   }))
@@ -106,5 +110,5 @@ export async function getDashboardData() {
     .orderBy(desc(messages.createdAt))
     .limit(20)
 
-  return { user, training, roster: rosterWithRatings, quickAddPlayers, recentMessages: recentMessages.reverse() }
+  return { user, training, roster: rosterWithRatings, quickAddPlayers, recentMessages: recentMessages.reverse(), currentPlayer }
 }
