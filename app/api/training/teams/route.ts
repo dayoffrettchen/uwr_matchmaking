@@ -9,8 +9,6 @@ type TeamActionRequest = {
   signupId?: number
   team?: number
   trainingId?: number
-  signupId?: number
-  team?: 1 | 2
 }
 
 export async function POST(request: Request) {
@@ -25,14 +23,15 @@ export async function POST(request: Request) {
       await assignBalancedTeams(trainingId)
     } else if (body?.action === "clear") {
       await resetTeams(trainingId)
-    } else if (body?.action === "move" && Number.isInteger(body.signupId) && (body.team === 1 || body.team === 2)) {
-      await moveSignupToTeam({ signupId: Number(body.signupId), team: body.team, trainingId })
     } else if (body?.action === "move") {
-      if (!Number.isInteger(body.signupId) || (body.team !== 1 && body.team !== 2)) {
+      const signupId = body.signupId
+      const team = body.team
+
+      if (typeof signupId !== "number" || !Number.isInteger(signupId) || (team !== 1 && team !== 2)) {
         return NextResponse.json({ error: "Ungültige Team-Zuordnung" }, { status: 400 })
       }
 
-      await moveSignupToTeam({ signupId: body.signupId, team: body.team, trainingId })
+      await moveSignupToTeam({ signupId, team, trainingId })
     } else {
       return NextResponse.json({ error: "Unbekannte Team-Aktion" }, { status: 400 })
     }
