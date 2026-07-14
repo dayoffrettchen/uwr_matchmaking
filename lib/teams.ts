@@ -2,7 +2,7 @@ import "server-only"
 
 import { db } from "@/lib/db"
 import { signups, trainings } from "@/lib/db/schema"
-import { desc, eq } from "drizzle-orm"
+import { and, desc, eq } from "drizzle-orm"
 
 async function getOpenTraining() {
   const [training] = await db
@@ -37,6 +37,25 @@ export async function assignRandomTeams() {
     const team = i < half ? 1 : 2
     await db.update(signups).set({ team }).where(eq(signups.id, ids[i]))
   }
+}
+
+export async function moveSignupToTeam(params: { signupId: number; team: 1 | 2; trainingId?: number }) {
+  const training = params.trainingId
+    ? (await db.select().from(trainings).where(eq(trainings.id, params.trainingId)).limit(1))[0]
+    : await getOpenTraining()
+  if (!training) return
+
+  await db
+    .update(signups)
+    .set({
+      team: params.team,
+      lineupType: null,
+      rotationGroupId: null,
+      rotationGroupType: null,
+      rotationOrder: null,
+      startsInWater: null,
+    })
+    .where(and(eq(signups.id, params.signupId), eq(signups.trainingId, training.id)))
 }
 
 export async function resetTeams(trainingId?: number) {
