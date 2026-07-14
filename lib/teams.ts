@@ -45,22 +45,17 @@ export async function moveSignupToTeam(params: { signupId: number; team: 1 | 2; 
     : await getOpenTraining()
   if (!training) return
 
-  await db.transaction(async (tx) => {
-    await tx
-      .update(signups)
-      .set({
-        rotationGroupId: null,
-        rotationGroupType: null,
-        rotationOrder: null,
-        startsInWater: null,
-      })
-      .where(eq(signups.trainingId, training.id))
-
-    await tx
-      .update(signups)
-      .set({ team: params.team })
-      .where(and(eq(signups.id, params.signupId), eq(signups.trainingId, training.id)))
-  })
+  await db
+    .update(signups)
+    .set({
+      team: params.team,
+      lineupType: null,
+      rotationGroupId: null,
+      rotationGroupType: null,
+      rotationOrder: null,
+      startsInWater: null,
+    })
+    .where(and(eq(signups.id, params.signupId), eq(signups.trainingId, training.id)))
 }
 
 export async function resetTeams(trainingId?: number) {

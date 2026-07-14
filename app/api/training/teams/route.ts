@@ -6,6 +6,8 @@ import { assignBalancedTeams } from "@/lib/matchmaking/balance-teams"
 
 type TeamActionRequest = {
   action?: "generate" | "clear" | "move"
+  signupId?: number
+  team?: number
   trainingId?: number
   signupId?: number
   team?: 1 | 2
@@ -25,6 +27,12 @@ export async function POST(request: Request) {
       await resetTeams(trainingId)
     } else if (body?.action === "move" && Number.isInteger(body.signupId) && (body.team === 1 || body.team === 2)) {
       await moveSignupToTeam({ signupId: Number(body.signupId), team: body.team, trainingId })
+    } else if (body?.action === "move") {
+      if (!Number.isInteger(body.signupId) || (body.team !== 1 && body.team !== 2)) {
+        return NextResponse.json({ error: "Ungültige Team-Zuordnung" }, { status: 400 })
+      }
+
+      await moveSignupToTeam({ signupId: body.signupId, team: body.team, trainingId })
     } else {
       return NextResponse.json({ error: "Unbekannte Team-Aktion" }, { status: 400 })
     }
