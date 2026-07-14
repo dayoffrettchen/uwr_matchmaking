@@ -3,10 +3,12 @@
 import { db } from "@/lib/db"
 import { messages, players, signups, trainings } from "@/lib/db/schema"
 import { getSessionUser } from "@/lib/auth/server"
+import { ensureDatabaseSchema } from "@/lib/db/ensure-schema"
 import { asc, desc, eq } from "drizzle-orm"
 
 export async function getDashboardData() {
   const user = await getSessionUser()
+  await ensureDatabaseSchema()
 
   const [training] = await db
     .select()
@@ -26,6 +28,8 @@ export async function getDashboardData() {
       name: players.name,
       phone: players.phone,
       team: signups.team,
+      assignedPosition: signups.assignedPosition,
+      lineupType: signups.lineupType,
       source: signups.source,
       createdAt: signups.createdAt,
     })
