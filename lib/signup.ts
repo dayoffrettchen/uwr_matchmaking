@@ -1,7 +1,7 @@
 import { db } from "@/lib/db"
 import { messages, players, signups, trainings } from "@/lib/db/schema"
 import { initializePlayerRatings } from "@/lib/players/initialize-ratings"
-import { and, desc, eq } from "drizzle-orm"
+import { and, asc, eq, sql } from "drizzle-orm"
 
 // Phrases that count as "I'm coming" / present.
 const PRESENT_PATTERNS = [/\bbin\s*da\b/i, /\bdabei\b/i, /\bbin\s*dabei\b/i, /\bkomme\b/i, /\b\+1\b/]
@@ -14,8 +14,8 @@ export async function getOpenTraining() {
   const [training] = await db
     .select()
     .from(trainings)
-    .where(eq(trainings.isOpen, true))
-    .orderBy(desc(trainings.scheduledAt))
+    .where(sql`${trainings.isOpen} = true and ${trainings.scheduledAt} >= ${new Date()}`)
+    .orderBy(asc(trainings.scheduledAt))
     .limit(1)
   return training ?? null
 }
