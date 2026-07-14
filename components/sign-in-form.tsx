@@ -31,8 +31,7 @@ export function SignInForm({
       const result = await authClient.signIn.social({
         provider: "google",
 
-        // Wichtig: relativer Pfad statt window.location.origin
-        callbackURL: "/",
+        callbackURL: window.location.origin,
       })
 
       if (result?.error) {

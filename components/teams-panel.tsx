@@ -73,6 +73,7 @@ export function TeamsPanel({ roster, canManage }: { roster: RosterPlayer[]; canM
           <div className="flex gap-2">
             {teamsAssigned && (
               <Button
+                type="button"
                 variant="ghost"
                 size="sm"
                 disabled={isMutating}
@@ -83,6 +84,7 @@ export function TeamsPanel({ roster, canManage }: { roster: RosterPlayer[]; canM
               </Button>
             )}
             <Button
+              type="button"
               size="sm"
               disabled={isMutating || roster.length < 2}
               onClick={() => void runTeamAction("generate")}
