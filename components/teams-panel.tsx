@@ -203,9 +203,16 @@ function TeamColumn({
   const ratedPlayers = players.filter((p) => typeof p.assignedRating === "number")
   const averageRating = ratedPlayers.length > 0 ? Math.round(ratedPlayers.reduce((sum, player) => sum + player.assignedRating!, 0) / ratedPlayers.length) : null
 
+  const columnClassName = variant === "primary"
+    ? "min-w-0 overflow-hidden rounded-lg border bg-card transition-colors"
+    : "min-w-0 overflow-hidden rounded-lg border border-team-white-border bg-team-white text-team-white-foreground transition-colors"
+  const headerClassName = variant === "primary"
+    ? "bg-primary text-primary-foreground"
+    : "border-b border-team-white-border bg-team-white text-team-white-foreground"
+
   return (
-    <div className="min-w-0 overflow-hidden rounded-lg border bg-card transition-colors">
-      <div className={`flex flex-col gap-2 rounded-t-lg px-4 py-3 sm:flex-row sm:items-start sm:justify-between ${variant === "primary" ? "bg-primary text-primary-foreground" : "border-b bg-card text-card-foreground"}`}>
+    <div className={columnClassName}>
+      <div className={`flex flex-col gap-2 rounded-t-lg px-4 py-3 sm:flex-row sm:items-start sm:justify-between ${headerClassName}`}>
         <span className="whitespace-nowrap text-lg font-semibold leading-tight">{label}</span>
         <div className="flex flex-wrap gap-2 sm:justify-end">
           <Badge variant="secondary" className="whitespace-nowrap">{active} im Wasser · {subs} draußen</Badge>
@@ -213,37 +220,39 @@ function TeamColumn({
         </div>
       </div>
       <div className="grid gap-3 p-3">
-        {PLAYER_POSITIONS.map((position) => <PositionGroups key={position} position={position} players={players.filter((p) => p.assignedPosition === position)} canManage={canManage} movingSignupId={movingSignupId} isDropTarget={dragTarget === position} onDragStart={onDragStart} onDragEnd={onDragEnd} onDragOver={(event) => onPositionDragOver(event, position)} onDragLeave={onPositionDragLeave} onDrop={(event) => onPositionDrop(event, position)} />)}
+        {PLAYER_POSITIONS.map((position) => <PositionGroups key={position} position={position} players={players.filter((p) => p.assignedPosition === position)} canManage={canManage} movingSignupId={movingSignupId} isDropTarget={dragTarget === position} isWhiteTeam={variant === "white"} onDragStart={onDragStart} onDragEnd={onDragEnd} onDragOver={(event) => onPositionDragOver(event, position)} onDragLeave={onPositionDragLeave} onDrop={(event) => onPositionDrop(event, position)} />)}
       </div>
     </div>
   )
 }
 
-function PositionGroups({ position, players, canManage, movingSignupId, isDropTarget, onDragStart, onDragEnd, onDragOver, onDragLeave, onDrop }: { position: PlayerPosition; players: RosterPlayer[]; canManage: boolean; movingSignupId: number | null; isDropTarget: boolean; onDragStart: (signupId: number) => void; onDragEnd: () => void; onDragOver: (event: DragEvent<HTMLDivElement>) => void; onDragLeave: () => void; onDrop: (event: DragEvent<HTMLDivElement>) => void }) {
+function PositionGroups({ position, players, canManage, movingSignupId, isDropTarget, isWhiteTeam, onDragStart, onDragEnd, onDragOver, onDragLeave, onDrop }: { position: PlayerPosition; players: RosterPlayer[]; canManage: boolean; movingSignupId: number | null; isDropTarget: boolean; isWhiteTeam: boolean; onDragStart: (signupId: number) => void; onDragEnd: () => void; onDragOver: (event: DragEvent<HTMLDivElement>) => void; onDragLeave: () => void; onDrop: (event: DragEvent<HTMLDivElement>) => void }) {
   const grouped = new Map<number, RosterPlayer[]>()
   for (const player of players) grouped.set(player.rotationGroupId ?? player.signupId, [...(grouped.get(player.rotationGroupId ?? player.signupId) ?? []), player])
 
+  const sectionClassName = `rounded-md border p-2 transition-colors ${isWhiteTeam ? "border-team-white-border bg-team-white" : "border-transparent"} ${isDropTarget ? "border-primary bg-primary/5" : ""}`
+
   return (
-    <section className={`rounded-md border border-transparent p-2 transition-colors ${isDropTarget ? "border-primary bg-primary/5" : ""}`} onDragOver={onDragOver} onDragLeave={onDragLeave} onDrop={onDrop}>
+    <section className={sectionClassName} onDragOver={onDragOver} onDragLeave={onDragLeave} onDrop={onDrop}>
       <h3 className="text-sm font-semibold text-muted-foreground">{POSITION_LABELS[position]}</h3>
       <div className="mt-1 grid gap-2">
         {players.length === 0 && <div className="rounded-md border px-3 py-2 text-sm text-muted-foreground">Leer</div>}
         {Array.from(grouped.entries()).map(([groupId, members]) => (
-          <RotationGroupCard key={groupId} groupId={groupId} members={members.sort((a, b) => (a.rotationOrder ?? 0) - (b.rotationOrder ?? 0))} canManage={canManage} movingSignupId={movingSignupId} onDragStart={onDragStart} onDragEnd={onDragEnd} />
+          <RotationGroupCard key={groupId} groupId={groupId} members={members.sort((a, b) => (a.rotationOrder ?? 0) - (b.rotationOrder ?? 0))} canManage={canManage} movingSignupId={movingSignupId} isWhiteTeam={isWhiteTeam} onDragStart={onDragStart} onDragEnd={onDragEnd} />
         ))}
       </div>
     </section>
   )
 }
 
-function RotationGroupCard({ groupId, members, canManage, movingSignupId, onDragStart, onDragEnd }: { groupId: number; members: RosterPlayer[]; canManage: boolean; movingSignupId: number | null; onDragStart: (signupId: number) => void; onDragEnd: () => void }) {
+function RotationGroupCard({ groupId, members, canManage, movingSignupId, isWhiteTeam, onDragStart, onDragEnd }: { groupId: number; members: RosterPlayer[]; canManage: boolean; movingSignupId: number | null; isWhiteTeam: boolean; onDragStart: (signupId: number) => void; onDragEnd: () => void }) {
   const type = members[0]?.rotationGroupType ?? "single"
   const label = type === "triple" ? "Dreier-Wechselgruppe" : type === "pair" ? "Zweierwechsel" : "Einzelbesetzung"
   const starters = members.filter((member) => member.startsInWater ?? member.lineupType !== "substitute")
   const waiting = members.filter((member) => !(member.startsInWater ?? member.lineupType !== "substitute"))
 
   return (
-    <div className="min-w-0 rounded-md border px-3 py-2 text-sm">
+    <div className={`min-w-0 rounded-md border px-3 py-2 text-sm ${isWhiteTeam ? "border-team-white-border bg-team-white text-team-white-foreground" : ""}`}>
       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <span className="min-w-0 break-words font-medium">{label} {groupId}</span>
         <Badge variant="secondary" className="max-w-full whitespace-normal text-left sm:shrink-0">Start: {starters.map((p) => p.name).join(" + ") || "—"}</Badge>
