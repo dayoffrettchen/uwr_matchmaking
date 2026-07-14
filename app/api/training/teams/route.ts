@@ -3,11 +3,13 @@ import { revalidatePath } from "next/cache"
 import { requireOrganizer } from "@/lib/auth/server"
 import { moveSignupToTeam, resetTeams } from "@/lib/teams"
 import { assignBalancedTeams } from "@/lib/matchmaking/balance-teams"
+import { PLAYER_POSITIONS, type PlayerPosition } from "@/lib/ratings/types"
 
 type TeamActionRequest = {
   action?: "generate" | "clear" | "move"
   signupId?: number
   team?: number
+  position?: string
   trainingId?: number
 }
 
@@ -26,12 +28,13 @@ export async function POST(request: Request) {
     } else if (body?.action === "move") {
       const signupId = body.signupId
       const team = body.team
+      const position = typeof body.position === "string" && PLAYER_POSITIONS.includes(body.position as PlayerPosition) ? body.position as PlayerPosition : undefined
 
       if (typeof signupId !== "number" || !Number.isInteger(signupId) || (team !== 1 && team !== 2)) {
         return NextResponse.json({ error: "Ungültige Team-Zuordnung" }, { status: 400 })
       }
 
-      await moveSignupToTeam({ signupId, team, trainingId })
+      await moveSignupToTeam({ signupId, team, position, trainingId })
     } else {
       return NextResponse.json({ error: "Unbekannte Team-Aktion" }, { status: 400 })
     }
