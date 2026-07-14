@@ -128,7 +128,7 @@ export default async function ErgebnissePage() {
           team: matchPlayers.team,
           position: matchPlayers.position,
           lineupType: matchPlayers.lineupType,
-          ratingDelta: matchPlayers.ratingDelta,
+          ratingDelta: canManage ? matchPlayers.ratingDelta : sql<number | null>`null`,
         })
         .from(matchPlayers)
         .innerJoin(players, eq(players.id, matchPlayers.playerId))
@@ -142,7 +142,7 @@ export default async function ErgebnissePage() {
 
   return (
     <main className="mx-auto flex min-h-screen max-w-5xl flex-col gap-6 px-4 py-8">
-      <AppNavigation />
+      <AppNavigation role={user.role} />
       <div>
         <h1 className="text-2xl font-bold">Ergebnisse</h1>
         <p className="text-muted-foreground">
@@ -219,8 +219,8 @@ export default async function ErgebnissePage() {
                   </div>
                   <MatchDuties entryPlayer={duties.entryPlayer} checkerPlayer={duties.checkerPlayer} />
                   <div className="grid gap-3 sm:grid-cols-2">
-                    <ResultTeam label="Team 1" players={groupPlayers(playersForMatch, 1)} />
-                    <ResultTeam label="Team 2" players={groupPlayers(playersForMatch, 2)} />
+                    <ResultTeam label="Team 1" players={groupPlayers(playersForMatch, 1)} showRatingDelta={canManage} />
+                    <ResultTeam label="Team 2" players={groupPlayers(playersForMatch, 2)} showRatingDelta={canManage} />
                   </div>
                   {canManage && !finalized && (
                     <form action={saveMatchScoreAction} className="flex flex-wrap items-end gap-3 rounded-lg border p-3">
@@ -281,7 +281,7 @@ function MatchDuties({ entryPlayer, checkerPlayer }: { entryPlayer: MatchPlayerR
   )
 }
 
-function ResultTeam({ label, players }: { label: string; players: MatchPlayerRow[] }) {
+function ResultTeam({ label, players, showRatingDelta }: { label: string; players: MatchPlayerRow[]; showRatingDelta: boolean }) {
   return (
     <div className="rounded-lg border">
       <div className="bg-muted px-3 py-2 font-semibold">{label}</div>
@@ -295,7 +295,7 @@ function ResultTeam({ label, players }: { label: string; players: MatchPlayerRow
                 {player.lineupType === "substitute" ? " · Wechsel" : ""}
               </span>
             </span>
-            {player.ratingDelta !== null && (
+            {showRatingDelta && player.ratingDelta !== null && (
               <span className={player.ratingDelta >= 0 ? "text-primary" : "text-destructive"}>
                 {player.ratingDelta >= 0 ? "+" : ""}
                 {player.ratingDelta}

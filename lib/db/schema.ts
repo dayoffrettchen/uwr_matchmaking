@@ -11,12 +11,30 @@ export const trainings = pgTable("trainings", {
 
 export const players = pgTable("players", {
   id: serial("id").primaryKey(),
+  authUserId: text("auth_user_id").unique(),
+  email: text("email").unique(),
   name: text("name").notNull(),
   phone: text("phone").unique(),
+  profileCompleted: boolean("profile_completed").notNull().default(false),
+  notes: text("notes"),
   skillRating: integer("skill_rating").notNull().default(5),
   initialRatingConfigured: boolean("initial_rating_configured").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 })
+
+export const playerPositionPreferences = pgTable(
+  "player_position_preferences",
+  {
+    id: serial("id").primaryKey(),
+    playerId: integer("player_id").notNull(),
+    position: text("position").notNull(),
+    preferenceOrder: integer("preference_order").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({ uniquePlayerPositionPreference: unique().on(t.playerId, t.position) }),
+)
 
 export const playerPositionRatings = pgTable(
   "player_position_ratings",
@@ -94,6 +112,7 @@ export const messages = pgTable("messages", {
 
 export type Training = typeof trainings.$inferSelect
 export type Player = typeof players.$inferSelect
+export type PlayerPositionPreference = typeof playerPositionPreferences.$inferSelect
 export type PlayerPositionRating = typeof playerPositionRatings.$inferSelect
 export type Match = typeof matches.$inferSelect
 export type MatchPlayer = typeof matchPlayers.$inferSelect

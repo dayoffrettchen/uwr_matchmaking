@@ -13,7 +13,7 @@ export function UserMenu({
 }: {
   name: string | null
   email: string | null
-  role: "organizer" | "viewer"
+  role: "organizer" | "player"
 }) {
   const router = useRouter()
 
@@ -28,7 +28,7 @@ export function UserMenu({
       <div className="hidden text-right sm:block">
         <p className="text-sm font-medium leading-tight">{name ?? email}</p>
         <Badge variant={role === "organizer" ? "default" : "secondary"} className="mt-0.5">
-          {role === "organizer" ? "Organisator" : "Zuschauer"}
+          {role === "organizer" ? "Organisator" : "Spieler"}
         </Badge>
       </div>
       <Button type="button" variant="outline" size="icon" onClick={handleSignOut} aria-label="Abmelden">

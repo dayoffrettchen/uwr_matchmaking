@@ -49,7 +49,7 @@ function organizerEmails(): string[] {
     .filter(Boolean)
 }
 
-export type AppRole = "organizer" | "viewer"
+export type AppRole = "organizer" | "player"
 
 export type SessionUser = {
   id: string
@@ -74,7 +74,7 @@ export async function getSessionUser(): Promise<SessionUser | null> {
   const role: AppRole =
     email && organizerEmails().includes(email)
       ? "organizer"
-      : "viewer"
+      : "player"
 
   return {
     id: session.user.id,
@@ -97,6 +97,33 @@ export async function requireOrganizer(): Promise<SessionUser> {
 
   if (user.role !== "organizer") {
     throw new Error("Nur Organisatoren dürfen das")
+  }
+
+  return user
+}
+
+
+/**
+ * Requires any authenticated Google user.
+ */
+export async function requireAuthenticatedUser(): Promise<SessionUser> {
+  const user = await getSessionUser()
+
+  if (!user) {
+    throw new Error("Nicht angemeldet")
+  }
+
+  return user
+}
+
+/**
+ * Requires an authenticated user with the player role.
+ */
+export async function requirePlayer(): Promise<SessionUser> {
+  const user = await requireAuthenticatedUser()
+
+  if (user.role !== "player") {
+    throw new Error("Nur Spieler dürfen das")
   }
 
   return user
