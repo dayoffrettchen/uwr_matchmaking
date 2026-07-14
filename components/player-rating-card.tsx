@@ -1,6 +1,9 @@
+"use client"
+
+import { useActionState } from "react"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { updatePlayerPositionRating } from "@/lib/players/mutations"
+import { updatePlayerPositionRating, type UpdatePlayerPositionRatingState } from "@/lib/players/mutations"
 import { getRatingConfidence, getRatingStatusLabel } from "@/lib/ratings/confidence"
 import { POSITION_LABELS, PLAYER_POSITIONS, type PlayerPosition } from "@/lib/ratings/types"
 
@@ -21,6 +24,8 @@ type PlayerWithRatings = {
   name: string
   ratings: Record<PlayerPosition, Rating>
 }
+
+const initialState: UpdatePlayerPositionRatingState = { ok: false }
 
 export function PlayerRatingCard({ player, canManage }: { player: PlayerWithRatings; canManage: boolean }) {
   const enabled = PLAYER_POSITIONS.filter((position) => player.ratings[position].isEligible)
@@ -56,56 +61,65 @@ export function PlayerRatingCard({ player, canManage }: { player: PlayerWithRati
               <p className="text-sm text-muted-foreground">
                 Konfidenz {Math.round(getRatingConfidence(rating.gamesPlayed) * 100)} %
               </p>
-              {canManage && (
-                <form action={updatePlayerPositionRating} className="mt-3 grid gap-2 text-sm">
-                  <input type="hidden" name="playerId" value={player.id} />
-                  <input type="hidden" name="position" value={position} />
-                  <label className="flex items-center gap-2">
-                    <input type="checkbox" name="isEligible" defaultChecked={rating.isEligible} />
-                    spielbar
-                  </label>
-                  <label>
-                    Präferenz
-                    <select
-                      name="preferenceOrder"
-                      defaultValue={rating.preferenceOrder ?? ""}
-                      className="mt-1 w-full rounded-md border bg-background px-2 py-1"
-                    >
-                      <option value="">Keine</option>
-                      <option value="1">Hauptposition</option>
-                      <option value="2">Nebenposition 1</option>
-                      <option value="3">Nebenposition 2</option>
-                    </select>
-                  </label>
-                  <label>
-                    Start-Rating
-                    <input
-                      name="initialRating"
-                      type="number"
-                      min="100"
-                      defaultValue={rating.initialRating}
-                      className="mt-1 w-full rounded-md border bg-background px-2 py-1"
-                    />
-                  </label>
-                  <label>
-                    Aktuelles Rating
-                    <input
-                      name="rating"
-                      type="number"
-                      min="100"
-                      defaultValue={rating.rating}
-                      className="mt-1 w-full rounded-md border bg-background px-2 py-1"
-                    />
-                  </label>
-                  <button className="rounded-md bg-primary px-2 py-1 text-primary-foreground">
-                    Speichern
-                  </button>
-                </form>
-              )}
+              {canManage && <PositionRatingForm playerId={player.id} position={position} rating={rating} />}
             </div>
           )
         })}
       </CardContent>
     </Card>
+  )
+}
+
+function PositionRatingForm({ playerId, position, rating }: { playerId: number; position: PlayerPosition; rating: Rating }) {
+  const [state, formAction, isPending] = useActionState(updatePlayerPositionRating, initialState)
+
+  return (
+    <form action={formAction} className="mt-3 grid gap-2 text-sm">
+      <input type="hidden" name="playerId" value={playerId} />
+      <input type="hidden" name="position" value={position} />
+      <label className="flex items-center gap-2">
+        <input type="checkbox" name="isEligible" defaultChecked={rating.isEligible} />
+        spielbar
+      </label>
+      <label>
+        Präferenz
+        <select
+          name="preferenceOrder"
+          defaultValue={rating.preferenceOrder ?? ""}
+          className="mt-1 w-full rounded-md border bg-background px-2 py-1"
+        >
+          <option value="">Keine</option>
+          <option value="1">Hauptposition</option>
+          <option value="2">Nebenposition 1</option>
+          <option value="3">Nebenposition 2</option>
+        </select>
+      </label>
+      <label>
+        Start-Rating
+        <input
+          name="initialRating"
+          type="number"
+          min="100"
+          defaultValue={rating.initialRating}
+          className="mt-1 w-full rounded-md border bg-background px-2 py-1"
+        />
+      </label>
+      <label>
+        Aktuelles Rating
+        <input
+          name="rating"
+          type="number"
+          min="100"
+          defaultValue={rating.rating}
+          className="mt-1 w-full rounded-md border bg-background px-2 py-1"
+        />
+      </label>
+      {state.message && (
+        <p className={state.ok ? "text-xs text-muted-foreground" : "text-xs text-destructive"}>{state.message}</p>
+      )}
+      <button disabled={isPending} className="rounded-md bg-primary px-2 py-1 text-primary-foreground disabled:opacity-60">
+        {isPending ? "Speichere …" : "Speichern"}
+      </button>
+    </form>
   )
 }
