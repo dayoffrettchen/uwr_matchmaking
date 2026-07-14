@@ -74,6 +74,7 @@ export async function clearTeams() {
 
 /** Simulate an incoming WhatsApp message (useful before the real webhook is wired up). */
 export async function simulateMessage(formData: FormData) {
+  await requireOrganizer()
   const name = String(formData.get("name") ?? "").trim()
   const body = String(formData.get("body") ?? "").trim()
   if (!name || !body) return

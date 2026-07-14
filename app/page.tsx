@@ -70,7 +70,7 @@ export default async function Page() {
           <RosterPanel roster={roster} canManage={canManage} />
           <TeamsPanel roster={roster} canManage={canManage} />
         </div>
-        <MessageFeed messages={recentMessages} />
+        <MessageFeed messages={recentMessages} canManage={canManage} />
       </div>
     </main>
   )

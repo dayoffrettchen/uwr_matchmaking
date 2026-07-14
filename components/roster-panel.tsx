@@ -1,6 +1,6 @@
 "use client"
 
-import { useRef, useTransition } from "react"
+import { FormEvent, useRef, useState, useTransition } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -16,7 +16,35 @@ type RosterPlayer = {
 
 export function RosterPanel({ roster, canManage }: { roster: RosterPlayer[]; canManage: boolean }) {
   const [isPending, startTransition] = useTransition()
+  const [error, setError] = useState<string | null>(null)
   const formRef = useRef<HTMLFormElement>(null)
+
+  function handleAddPlayer(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    const form = event.currentTarget
+    const formData = new FormData(form)
+
+    startTransition(async () => {
+      setError(null)
+      try {
+        await addPlayerToTraining(formData)
+        form.reset()
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Spieler konnte nicht hinzugefügt werden.")
+      }
+    })
+  }
+
+  function handleRemoveSignup(signupId: number) {
+    startTransition(async () => {
+      setError(null)
+      try {
+        await removeSignup(signupId)
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Anmeldung konnte nicht entfernt werden.")
+      }
+    })
+  }
 
   return (
     <Card>
@@ -30,21 +58,18 @@ export function RosterPanel({ roster, canManage }: { roster: RosterPlayer[]; can
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
         {canManage && (
-          <form
-            ref={formRef}
-            action={(formData) => {
-              startTransition(async () => {
-                await addPlayerToTraining(formData)
-                formRef.current?.reset()
-              })
-            }}
-            className="flex gap-2"
-          >
+          <form ref={formRef} onSubmit={handleAddPlayer} className="flex gap-2">
             <Input name="name" placeholder="Name hinzufügen" aria-label="Spielername" required />
             <Button type="submit" size="icon" disabled={isPending} aria-label="Hinzufügen">
               <UserPlus className="size-4" aria-hidden />
             </Button>
           </form>
+        )}
+
+        {error && (
+          <p className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+            {error}
+          </p>
         )}
 
         <ul className="divide-y rounded-lg border">
@@ -62,7 +87,7 @@ export function RosterPanel({ roster, canManage }: { roster: RosterPlayer[]; can
                   size="icon"
                   className="size-7 text-muted-foreground hover:text-destructive"
                   disabled={isPending}
-                  onClick={() => startTransition(() => removeSignup(p.signupId))}
+                  onClick={() => handleRemoveSignup(p.signupId)}
                   aria-label={`${p.name} entfernen`}
                 >
                   <Trash2 className="size-4" aria-hidden />
