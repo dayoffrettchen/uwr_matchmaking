@@ -5,6 +5,7 @@ import { messages, playerPositionRatings, players, signups, trainings } from "@/
 import { getSessionUser } from "@/lib/auth/server"
 import { ensureCurrentPlayerProfile } from "@/lib/players/ensure-profile"
 import { ensureDatabaseSchema } from "@/lib/db/ensure-schema"
+import { ensureNextRegularTraining } from "@/lib/training/schedule"
 import { asc, desc, eq, inArray, sql } from "drizzle-orm"
 
 export async function getDashboardData() {
@@ -14,6 +15,8 @@ export async function getDashboardData() {
   const currentPlayer = user?.role === "player" ? await ensureCurrentPlayerProfile(user) : null
 
   const now = new Date()
+  await ensureNextRegularTraining(now)
+
   const [nextTraining] = await db
     .select()
     .from(trainings)
