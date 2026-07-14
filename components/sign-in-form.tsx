@@ -118,6 +118,7 @@ function formatAuthError(error: unknown): string {
   }
 
   if (
+    searchableText.includes("FEATURE_NOT_SUPPORTED") ||
     searchableText.includes("PROVIDER_DISABLED") ||
     searchableText.includes("PROVIDER_NOT_ENABLED") ||
     searchableText.includes("SOCIAL_PROVIDER_DISABLED") ||
