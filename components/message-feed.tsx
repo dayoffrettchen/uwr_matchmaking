@@ -1,10 +1,10 @@
 "use client"
 
 import { FormEvent, useRef, useState, useTransition } from "react"
+import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
-import { simulateMessage } from "@/app/actions/training"
 import { Check, Send } from "lucide-react"
 
 type Msg = {
@@ -16,6 +16,7 @@ type Msg = {
 }
 
 export function MessageFeed({ messages, canManage }: { messages: Msg[]; canManage: boolean }) {
+  const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
   const formRef = useRef<HTMLFormElement>(null)
@@ -28,6 +29,24 @@ export function MessageFeed({ messages, canManage }: { messages: Msg[]; canManag
     startTransition(async () => {
       setError(null)
       try {
+        const response = await fetch("/api/training/messages/simulate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: String(formData.get("name") ?? ""),
+            body: String(formData.get("body") ?? ""),
+          }),
+        })
+        const data = await response.json().catch(() => null)
+
+        if (!response.ok) {
+          throw new Error(
+            typeof data?.error === "string" ? data.error : "Nachricht konnte nicht gesendet werden.",
+          )
+        }
+
+        form.reset()
+        router.refresh()
         await simulateMessage(formData)
         form.reset()
       } catch (err) {

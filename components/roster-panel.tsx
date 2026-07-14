@@ -1,11 +1,11 @@
 "use client"
 
 import { FormEvent, useRef, useState, useTransition } from "react"
+import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
-import { addPlayerToTraining, removeSignup } from "@/app/actions/training"
 import { Trash2, UserPlus, MessageCircle } from "lucide-react"
 
 type RosterPlayer = {
@@ -15,6 +15,7 @@ type RosterPlayer = {
 }
 
 export function RosterPanel({ roster, canManage }: { roster: RosterPlayer[]; canManage: boolean }) {
+  const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
   const formRef = useRef<HTMLFormElement>(null)
@@ -27,6 +28,21 @@ export function RosterPanel({ roster, canManage }: { roster: RosterPlayer[]; can
     startTransition(async () => {
       setError(null)
       try {
+        const response = await fetch("/api/training/signups", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name: String(formData.get("name") ?? "") }),
+        })
+        const data = await response.json().catch(() => null)
+
+        if (!response.ok) {
+          throw new Error(
+            typeof data?.error === "string" ? data.error : "Spieler konnte nicht hinzugefügt werden.",
+          )
+        }
+
+        form.reset()
+        router.refresh()
         await addPlayerToTraining(formData)
         form.reset()
       } catch (err) {
@@ -39,6 +55,20 @@ export function RosterPanel({ roster, canManage }: { roster: RosterPlayer[]; can
     startTransition(async () => {
       setError(null)
       try {
+        const response = await fetch("/api/training/signups", {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ signupId }),
+        })
+        const data = await response.json().catch(() => null)
+
+        if (!response.ok) {
+          throw new Error(
+            typeof data?.error === "string" ? data.error : "Anmeldung konnte nicht entfernt werden.",
+          )
+        }
+
+        router.refresh()
         await removeSignup(signupId)
       } catch (err) {
         setError(err instanceof Error ? err.message : "Anmeldung konnte nicht entfernt werden.")

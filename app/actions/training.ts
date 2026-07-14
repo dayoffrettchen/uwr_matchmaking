@@ -2,11 +2,8 @@
 
 import { db } from "@/lib/db"
 import { messages, players, signups, trainings } from "@/lib/db/schema"
-import { signUpPlayer } from "@/lib/signup"
-import { getSessionUser, requireOrganizer } from "@/lib/auth/server"
-import { assignRandomTeams, resetTeams } from "@/lib/teams"
-import { and, asc, desc, eq } from "drizzle-orm"
-import { revalidatePath } from "next/cache"
+import { getSessionUser } from "@/lib/auth/server"
+import { asc, desc, eq } from "drizzle-orm"
 
 export async function getDashboardData() {
   const user = await getSessionUser()
