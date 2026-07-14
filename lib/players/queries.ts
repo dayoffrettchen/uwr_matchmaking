@@ -1,6 +1,6 @@
 import { db } from "@/lib/db"
 import { players, playerPositionRatings } from "@/lib/db/schema"
-import { asc, eq, sql } from "drizzle-orm"
+import { asc, desc, eq, sql } from "drizzle-orm"
 import { PLAYER_POSITIONS, type PlayerPosition } from "@/lib/ratings/types"
 import { DEFAULT_RATING } from "@/lib/ratings/constants"
 
@@ -23,7 +23,7 @@ export async function listPlayersWithRatings() {
     })
     .from(players)
     .leftJoin(playerPositionRatings, eq(playerPositionRatings.playerId, players.id))
-    .orderBy(asc(players.name), asc(playerPositionRatings.preferenceOrder), asc(playerPositionRatings.position))
+    .orderBy(desc(players.createdAt), asc(players.name), asc(playerPositionRatings.preferenceOrder), asc(playerPositionRatings.position))
 
   const grouped = new Map<number, { id: number; name: string; phone: string | null; ratings: Record<PlayerPosition, any> }>()
   for (const row of rows) {
