@@ -4,6 +4,7 @@ import { db } from "@/lib/db"
 import { messages, players, signups, trainings } from "@/lib/db/schema"
 import { signUpPlayer } from "@/lib/signup"
 import { getSessionUser, requireOrganizer } from "@/lib/auth/server"
+import { assignRandomTeams, resetTeams } from "@/lib/teams"
 import { and, asc, desc, eq } from "drizzle-orm"
 import { revalidatePath } from "next/cache"
 
@@ -59,48 +60,15 @@ export async function removeSignup(signupId: number) {
   revalidatePath("/")
 }
 
-/** Randomly splits all signed-up players into two balanced-size teams. */
 export async function generateTeams() {
   await requireOrganizer()
-  const [training] = await db
-    .select()
-    .from(trainings)
-    .where(eq(trainings.isOpen, true))
-    .orderBy(desc(trainings.scheduledAt))
-    .limit(1)
-  if (!training) return
-
-  const rows = await db
-    .select({ id: signups.id })
-    .from(signups)
-    .where(eq(signups.trainingId, training.id))
-
-  // Fisher-Yates shuffle.
-  const ids = rows.map((r) => r.id)
-  for (let i = ids.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1))
-    ;[ids[i], ids[j]] = [ids[j], ids[i]]
-  }
-
-  const half = Math.ceil(ids.length / 2)
-  for (let i = 0; i < ids.length; i++) {
-    const team = i < half ? 1 : 2
-    await db.update(signups).set({ team }).where(eq(signups.id, ids[i]))
-  }
-
+  await assignRandomTeams()
   revalidatePath("/")
 }
 
 export async function clearTeams() {
   await requireOrganizer()
-  const [training] = await db
-    .select()
-    .from(trainings)
-    .where(eq(trainings.isOpen, true))
-    .orderBy(desc(trainings.scheduledAt))
-    .limit(1)
-  if (!training) return
-  await db.update(signups).set({ team: null }).where(eq(signups.trainingId, training.id))
+  await resetTeams()
   revalidatePath("/")
 }
 

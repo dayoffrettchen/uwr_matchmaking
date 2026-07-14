@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { generateTeams, clearTeams } from "@/app/actions/training"
 import { Shuffle, Users, X } from "lucide-react"
 
 type RosterPlayer = {
@@ -33,10 +32,20 @@ export function TeamsPanel({ roster, canManage }: { roster: RosterPlayer[]; canM
     setError(null)
 
     try {
-      if (action === "generate") {
-        await generateTeams()
-      } else {
-        await clearTeams()
+      const response = await fetch("/api/training/teams", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action }),
+        redirect: "manual",
+      })
+
+      if (!response.ok || response.type === "opaqueredirect") {
+        const data = await response.json().catch(() => null)
+        const message =
+          typeof data?.error === "string"
+            ? data.error
+            : "Die Team-Aktion ist fehlgeschlagen. Bitte versuche es erneut."
+        throw new Error(message)
       }
 
       startTransition(() => {
