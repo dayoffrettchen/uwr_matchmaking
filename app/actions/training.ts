@@ -12,7 +12,7 @@ export async function getDashboardData() {
   const user = await getSessionUser()
   await ensureDatabaseSchema()
 
-  const currentPlayer = user?.role === "player" ? await ensureCurrentPlayerProfile(user) : null
+  const currentPlayer = user ? await ensureCurrentPlayerProfile(user) : null
 
   const now = new Date()
   const training = await ensureNextRegularTraining(now)
