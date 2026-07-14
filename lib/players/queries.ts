@@ -5,6 +5,13 @@ import { PLAYER_POSITIONS, type PlayerPosition } from "@/lib/ratings/types"
 import { DEFAULT_RATING } from "@/lib/ratings/constants"
 import { getRatingConfidence } from "@/lib/ratings/confidence"
 
+function toTime(value: Date | string | null | undefined) {
+  if (!value) return 0
+  const date = value instanceof Date ? value : new Date(value)
+  const time = date.getTime()
+  return Number.isFinite(time) ? time : 0
+}
+
 function shouldReviewMainPosition(player: { ratings: Record<PlayerPosition, any> }) {
   const mainPosition = PLAYER_POSITIONS.find((position) => player.ratings[position].preferenceOrder === 1)
   if (!mainPosition) return false
@@ -73,8 +80,8 @@ export async function listPlayersWithRatings() {
     if (aNeedsReview !== bNeedsReview) return aNeedsReview ? -1 : 1
     if (aHasPosition !== bHasPosition) return aHasPosition ? 1 : -1
 
-    const aLastMatch = a.lastMatchAt?.getTime() ?? 0
-    const bLastMatch = b.lastMatchAt?.getTime() ?? 0
+    const aLastMatch = toTime(a.lastMatchAt)
+    const bLastMatch = toTime(b.lastMatchAt)
     if (aLastMatch !== bLastMatch) return aLastMatch - bLastMatch
 
     return a.name.localeCompare(b.name, "de")
