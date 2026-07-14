@@ -5,7 +5,7 @@ import { MessageFeed } from "@/components/message-feed"
 import { UserMenu } from "@/components/user-menu"
 import { AppNavigation } from "@/components/app-navigation"
 import { Card, CardContent } from "@/components/ui/card"
-import { CalendarDays, MapPin, Waves } from "lucide-react"
+import { CalendarDays, Clock, MapPin, Waves } from "lucide-react"
 import { redirect } from "next/navigation"
 
 export const dynamic = "force-dynamic"
@@ -16,6 +16,7 @@ export default async function Page() {
   if (!user) redirect("/sign-in")
 
   const canManage = user.role === "organizer"
+  const trainingIsPast = training ? new Date(training.scheduledAt).getTime() < Date.now() : false
 
   const dateLabel = training
     ? new Date(training.scheduledAt).toLocaleString("de-DE", {
@@ -57,6 +58,15 @@ export default async function Page() {
                 {training.location}
               </span>
             )}
+            <span className="flex items-center gap-1.5 text-sm opacity-90">
+              <Clock className="size-4" aria-hidden />
+              Montag 19:00–20:00 · Freitag 19:00–21:00
+            </span>
+            {trainingIsPast && (
+              <span className="rounded-full bg-primary-foreground/15 px-2 py-0.5 text-xs font-medium">
+                Vergangenes Training · Aufstellung weiterhin möglich
+              </span>
+            )}
           </CardContent>
         </Card>
       ) : (
@@ -70,7 +80,7 @@ export default async function Page() {
       <div className="grid gap-6 lg:grid-cols-[1fr_1.1fr]">
         <div className="flex flex-col gap-6">
           <RosterPanel roster={roster} canManage={canManage} />
-          <TeamsPanel roster={roster} canManage={canManage} />
+          <TeamsPanel roster={roster} canManage={canManage} trainingId={training?.id} />
         </div>
         <MessageFeed messages={recentMessages} canManage={canManage} />
       </div>
