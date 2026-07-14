@@ -23,7 +23,7 @@ function formatTrainingDate(scheduledAt: Date) {
 }
 
 export default async function Page() {
-  const { user, training, roster, recentMessages } = await getDashboardData()
+  const { user, training, roster, quickAddPlayers, recentMessages } = await getDashboardData()
 
   if (!user) redirect("/sign-in")
 
@@ -83,7 +83,7 @@ export default async function Page() {
 
       <div className="grid gap-6 lg:grid-cols-[1fr_1.1fr]">
         <div className="flex flex-col gap-6">
-          <RosterPanel roster={roster} canManage={canManage} />
+          <RosterPanel roster={roster} quickAddPlayers={quickAddPlayers} canManage={canManage} />
           <TeamsPanel roster={roster} canManage={canManage} trainingId={training?.id} />
         </div>
         <MessageFeed messages={recentMessages} canManage={canManage} />

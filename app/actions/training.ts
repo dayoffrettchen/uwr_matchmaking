@@ -4,7 +4,7 @@ import { db } from "@/lib/db"
 import { messages, players, signups, trainings } from "@/lib/db/schema"
 import { getSessionUser } from "@/lib/auth/server"
 import { ensureDatabaseSchema } from "@/lib/db/ensure-schema"
-import { asc, desc, eq } from "drizzle-orm"
+import { asc, desc, eq, inArray, sql } from "drizzle-orm"
 
 export async function getDashboardData() {
   const user = await getSessionUser()
@@ -24,7 +24,7 @@ export async function getDashboardData() {
   const training = latestTraining ?? null
 
   if (!training) {
-    return { user, training: null, roster: [], recentMessages: [] }
+    return { user, training: null, roster: [], quickAddPlayers: [], recentMessages: [] }
   }
 
   const roster = await db
@@ -44,11 +44,45 @@ export async function getDashboardData() {
     .where(eq(signups.trainingId, training.id))
     .orderBy(asc(signups.createdAt))
 
+  const previousTrainings = await db
+    .select({ id: trainings.id })
+    .from(trainings)
+    .where(sql`${trainings.scheduledAt} < ${training.scheduledAt}`)
+    .orderBy(desc(trainings.scheduledAt))
+    .limit(3)
+
+  const previousTrainingIds = previousTrainings.map((previousTraining) => previousTraining.id)
+
+  const [allPlayers, previousSignups] = await Promise.all([
+    db.select({ id: players.id, name: players.name }).from(players).orderBy(asc(players.name)),
+    previousTrainingIds.length > 0
+      ? db
+          .select({ playerId: signups.playerId })
+          .from(signups)
+          .where(inArray(signups.trainingId, previousTrainingIds))
+      : Promise.resolve([]),
+  ])
+
+  const currentRosterPlayerIds = new Set(roster.map((player) => player.playerId))
+  const attendanceByPlayerId = new Map<number, number>()
+  for (const signup of previousSignups) {
+    attendanceByPlayerId.set(signup.playerId, (attendanceByPlayerId.get(signup.playerId) ?? 0) + 1)
+  }
+
+  const quickAddPlayers = allPlayers
+    .filter((player) => !currentRosterPlayerIds.has(player.id))
+    .map((player) => ({
+      id: player.id,
+      name: player.name,
+      recentAttendanceCount: attendanceByPlayerId.get(player.id) ?? 0,
+    }))
+    .sort((a, b) => b.recentAttendanceCount - a.recentAttendanceCount || a.name.localeCompare(b.name, "de"))
+
   const recentMessages = await db
     .select()
     .from(messages)
     .orderBy(desc(messages.createdAt))
     .limit(20)
 
-  return { user, training, roster, recentMessages: recentMessages.reverse() }
+  return { user, training, roster, quickAddPlayers, recentMessages: recentMessages.reverse() }
 }
