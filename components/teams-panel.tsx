@@ -47,7 +47,7 @@ export function TeamsPanel({ roster, canManage, trainingId, locale = "de" }: { r
     setError(null)
 
     try {
-      await postTeamAction({ action, trainingId })
+      await postTeamAction({ action, trainingId }, t.actionFailed)
       startTransition(() => router.refresh())
     } catch (err) {
       setError(err instanceof Error ? err.message : t.actionFailed)
@@ -64,7 +64,7 @@ export function TeamsPanel({ roster, canManage, trainingId, locale = "de" }: { r
     setError(null)
 
     try {
-      await postTeamAction({ action: "move", trainingId, signupId, team, position })
+      await postTeamAction({ action: "move", trainingId, signupId, team, position }, t.moveFailed)
       startTransition(() => router.refresh())
     } catch (err) {
       setError(err instanceof Error ? err.message : t.moveFailed)
@@ -154,7 +154,7 @@ export function TeamsPanel({ roster, canManage, trainingId, locale = "de" }: { r
   )
 }
 
-async function postTeamAction(body: Record<string, unknown>) {
+async function postTeamAction(body: Record<string, unknown>, fallbackMessage: string) {
   const response = await fetch("/api/training/teams", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -164,7 +164,7 @@ async function postTeamAction(body: Record<string, unknown>) {
 
   if (!response.ok || response.type === "opaqueredirect") {
     const data = await response.json().catch(() => null)
-    throw new Error(typeof data?.error === "string" ? data.error : t.actionFailed)
+    throw new Error(typeof data?.error === "string" ? data.error : fallbackMessage)
   }
 }
 

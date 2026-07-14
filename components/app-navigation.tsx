@@ -7,12 +7,12 @@ import type { AppRole } from "@/lib/auth/server"
 const labels = {
   de: {
     players: "Spieler",
-    results: "Ergebnisse",
+    results: "Spiele",
     profile: "Mein Profil",
   },
   en: {
     players: "Players",
-    results: "Results",
+    results: "Games",
     profile: "My Profile",
   },
 } satisfies Record<Locale, Record<string, string>>
