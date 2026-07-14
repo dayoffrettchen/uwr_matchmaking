@@ -116,4 +116,12 @@ describe("genetisches Matchmaking", () => {
     expect(result.optimality).toBe("best-found")
     expect(result.assignments).toHaveLength(12)
   })
+
+  it("liefert auch bei erschöpftem Suchbudget eine Greedy-Einteilung", () => {
+    const result = balanceMatchmakingPlayers(fairnessFixture(), { seed: 9, maxCandidates: 0, maxGenerations: 0, maxComputationTimeMs: -1, populationSize: 0 })
+    expect(result.candidatesEvaluated).toBe(1)
+    expect(result.assignments).toHaveLength(12)
+    expect(result.assignments.some((assignment) => assignment.team === 1)).toBe(true)
+    expect(result.assignments.some((assignment) => assignment.team === 2)).toBe(true)
+  })
 })
