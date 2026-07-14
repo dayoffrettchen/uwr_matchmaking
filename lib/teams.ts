@@ -2,7 +2,7 @@ import "server-only"
 
 import { db } from "@/lib/db"
 import { signups, trainings } from "@/lib/db/schema"
-import { desc, eq } from "drizzle-orm"
+import { and, desc, eq } from "drizzle-orm"
 
 async function getOpenTraining() {
   const [training] = await db
@@ -39,11 +39,35 @@ export async function assignRandomTeams() {
   }
 }
 
+export async function moveSignupToTeam(params: { signupId: number; team: 1 | 2; trainingId?: number }) {
+  const training = params.trainingId
+    ? (await db.select().from(trainings).where(eq(trainings.id, params.trainingId)).limit(1))[0]
+    : await getOpenTraining()
+  if (!training) return
+
+  await db.transaction(async (tx) => {
+    await tx
+      .update(signups)
+      .set({
+        rotationGroupId: null,
+        rotationGroupType: null,
+        rotationOrder: null,
+        startsInWater: null,
+      })
+      .where(eq(signups.trainingId, training.id))
+
+    await tx
+      .update(signups)
+      .set({ team: params.team })
+      .where(and(eq(signups.id, params.signupId), eq(signups.trainingId, training.id)))
+  })
+}
+
 export async function resetTeams(trainingId?: number) {
   const training = trainingId
     ? (await db.select().from(trainings).where(eq(trainings.id, trainingId)).limit(1))[0]
     : await getOpenTraining()
   if (!training) return
 
-  await db.update(signups).set({ team: null, assignedPosition: null, lineupType: null }).where(eq(signups.trainingId, training.id))
+  await db.update(signups).set({ team: null, assignedPosition: null, lineupType: null, rotationGroupId: null, rotationGroupType: null, rotationOrder: null, startsInWater: null }).where(eq(signups.trainingId, training.id))
 }

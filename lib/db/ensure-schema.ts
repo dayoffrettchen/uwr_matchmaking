@@ -64,6 +64,14 @@ const SCHEMA_STATEMENTS = [
   )`,
   "ALTER TABLE signups ADD COLUMN IF NOT EXISTS assigned_position text",
   "ALTER TABLE signups ADD COLUMN IF NOT EXISTS lineup_type text",
+  "ALTER TABLE signups ADD COLUMN IF NOT EXISTS rotation_group_id integer",
+  "ALTER TABLE signups ADD COLUMN IF NOT EXISTS rotation_group_type text",
+  "ALTER TABLE signups ADD COLUMN IF NOT EXISTS rotation_order integer",
+  "ALTER TABLE signups ADD COLUMN IF NOT EXISTS starts_in_water boolean",
+  "ALTER TABLE match_players ADD COLUMN IF NOT EXISTS rotation_group_id integer",
+  "ALTER TABLE match_players ADD COLUMN IF NOT EXISTS rotation_group_type text",
+  "ALTER TABLE match_players ADD COLUMN IF NOT EXISTS rotation_order integer",
+  "ALTER TABLE match_players ADD COLUMN IF NOT EXISTS starts_in_water boolean",
   `INSERT INTO player_position_ratings (player_id, position)
    SELECT p.id, v.position
    FROM players p
