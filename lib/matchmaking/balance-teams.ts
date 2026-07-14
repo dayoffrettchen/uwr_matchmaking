@@ -114,8 +114,7 @@ export function balanceMatchmakingPlayers(input: MatchmakingPlayer[]): Matchmaki
   for (const p of input.filter((p) => p.eligiblePositions.length === 0)) warnings.push(`${p.name} besitzt keine freigeschaltete Position und wurde nur provisorisch zugeordnet.`)
   const availability = Object.fromEntries(PLAYER_POSITIONS.map((pos) => [pos, players.filter((p) => p.eligiblePositions.includes(pos)).length])) as Record<PlayerPosition, number>
   for (const pos of PLAYER_POSITIONS) if (availability[pos] < 2) warnings.push(`Nicht genügend Spieler für ${pos} verfügbar.`)
-  const activePerTeam = Math.min(MAX_ACTIVE_PLAYERS_PER_TEAM, Math.floor(players.length / 2))
-  const target = getTargetLineup(activePerTeam, availability)
+  const target = getTargetLineup(MAX_ACTIVE_PLAYERS_PER_TEAM, availability)
   const ordered = [...players].sort((a, b) => a.eligiblePositions.length - b.eligiblePositions.length || a.name.localeCompare(b.name))
   const drafts: DraftAssignment[] = []
   const positionCounts = { 1: { goalkeeper: 0, defender: 0, forward: 0 }, 2: { goalkeeper: 0, defender: 0, forward: 0 } } as Record<1 | 2, Record<PlayerPosition, number>>
@@ -125,7 +124,15 @@ export function balanceMatchmakingPlayers(input: MatchmakingPlayer[]): Matchmaki
   for (const p of ordered) {
     const options: DraftAssignment[] = []
     for (const position of p.eligiblePositions) for (const team of [1, 2] as const) {
-      if (teamCounts[team] < maxTeamSize) options.push({ signupId: p.signupId, playerId: p.playerId, team, position })
+      if (teamCounts[team] >= maxTeamSize) continue
+      const createsSubstitute = positionCounts[team][position] >= target[position]
+      const teamHasCompleteStartingLineup = PLAYER_POSITIONS.every((candidate) => positionCounts[team][candidate] >= target[candidate])
+      if (!createsSubstitute || teamHasCompleteStartingLineup) options.push({ signupId: p.signupId, playerId: p.playerId, team, position })
+    }
+    if (options.length === 0) {
+      for (const position of p.eligiblePositions) for (const team of [1, 2] as const) {
+        if (teamCounts[team] < maxTeamSize) options.push({ signupId: p.signupId, playerId: p.playerId, team, position })
+      }
     }
     options.sort((a, b) => {
       const teamSizeBias = (teamCounts[a.team] - teamCounts[b.team]) * 100000
