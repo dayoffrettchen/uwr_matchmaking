@@ -5,7 +5,11 @@ import { updateOwnProfile } from "@/lib/players/update-own-profile"
 import { PLAYER_POSITIONS, type PlayerPosition } from "@/lib/ratings/types"
 
 export async function saveOwnProfile(formData: FormData) {
-  const preferredPositions = PLAYER_POSITIONS.filter((position) => formData.getAll("preferredPositions").includes(position)) as PlayerPosition[]
+  const mainPositions = PLAYER_POSITIONS.filter((position) => formData.get(`${position}:positionRole`) === "main") as PlayerPosition[]
+  if (mainPositions.length !== 1) throw new Error("Bitte wähle genau eine Hauptposition.")
+
+  const secondaryPositions = PLAYER_POSITIONS.filter((position) => formData.get(`${position}:positionRole`) === "secondary") as PlayerPosition[]
+  const preferredPositions = [mainPositions[0], ...secondaryPositions]
 
   await updateOwnProfile({
     name: String(formData.get("name") ?? ""),

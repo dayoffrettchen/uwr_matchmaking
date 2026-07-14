@@ -34,7 +34,8 @@ export default async function ProfilePage() {
       .orderBy(asc(playerPositionRatings.preferenceOrder)),
   ])
   const eligibleRatings = ratings.filter((rating) => rating.isEligible)
-  const selected = new Set((eligibleRatings.length > 0 ? eligibleRatings : preferences).map((preference) => preference.position))
+  const profilePositions = eligibleRatings.length > 0 ? eligibleRatings : preferences
+  const preferenceOrderByPosition = new Map(profilePositions.map((preference) => [preference.position, preference.preferenceOrder]))
 
   return (
     <main className="mx-auto flex min-h-screen max-w-3xl flex-col gap-6 px-4 py-8">
@@ -51,12 +52,22 @@ export default async function ProfilePage() {
             <label className="grid gap-2 text-sm font-medium">Telefonnummer<Input name="phone" defaultValue={player.phone ?? ""} placeholder="optional" /></label>
             <fieldset className="grid gap-3 rounded-lg border p-4">
               <legend className="px-1 text-sm font-medium">Bevorzugte Positionen</legend>
-              {PLAYER_POSITIONS.map((position) => (
-                <label key={position} className="flex items-center gap-2 text-sm">
-                  <input type="checkbox" name="preferredPositions" value={position} defaultChecked={selected.has(position)} className="size-4" />
-                  {POSITION_LABELS[position]}
-                </label>
-              ))}
+              <p className="text-sm text-muted-foreground">Wähle eine Hauptposition und markiere weitere spielbare Positionen als Nebenposition.</p>
+              {PLAYER_POSITIONS.map((position) => {
+                const preferenceOrder = preferenceOrderByPosition.get(position)
+                const defaultRole = preferenceOrder === 1 ? "main" : preferenceOrder ? "secondary" : "none"
+
+                return (
+                  <label key={position} className="grid gap-1 text-sm font-medium sm:grid-cols-[1fr_12rem] sm:items-center">
+                    <span>{POSITION_LABELS[position]}</span>
+                    <select name={`${position}:positionRole`} defaultValue={defaultRole} className="rounded-md border bg-background px-3 py-2 text-sm">
+                      <option value="none">Nicht spielen</option>
+                      <option value="main">Hauptposition</option>
+                      <option value="secondary">Nebenposition</option>
+                    </select>
+                  </label>
+                )
+              })}
             </fieldset>
             <label className="grid gap-2 text-sm font-medium">Persönliche Hinweise<textarea name="notes" defaultValue={player.notes ?? ""} maxLength={1000} className="min-h-24 rounded-md border bg-background px-3 py-2 text-sm" placeholder="optional" /></label>
             <Button type="submit">Profil speichern</Button>
