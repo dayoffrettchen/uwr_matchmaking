@@ -3,6 +3,7 @@ import { RosterPanel } from "@/components/roster-panel"
 import { TeamsPanel } from "@/components/teams-panel"
 import { MessageFeed } from "@/components/message-feed"
 import { UserMenu } from "@/components/user-menu"
+import { AppNavigation } from "@/components/app-navigation"
 import { Card, CardContent } from "@/components/ui/card"
 import { CalendarDays, MapPin, Waves } from "lucide-react"
 import { redirect } from "next/navigation"
@@ -40,6 +41,7 @@ export default async function Page() {
         </div>
         <UserMenu name={user.name} email={user.email} role={user.role} />
       </header>
+      <AppNavigation />
 
       {training ? (
         <Card className="bg-primary text-primary-foreground">

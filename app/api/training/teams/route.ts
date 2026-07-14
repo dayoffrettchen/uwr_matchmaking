@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server"
 import { revalidatePath } from "next/cache"
 import { requireOrganizer } from "@/lib/auth/server"
-import { assignRandomTeams, resetTeams } from "@/lib/teams"
+import { resetTeams } from "@/lib/teams"
+import { assignBalancedTeams } from "@/lib/matchmaking/balance-teams"
 
 type TeamActionRequest = {
   action?: "generate" | "clear"
@@ -14,7 +15,7 @@ export async function POST(request: Request) {
     const body = (await request.json().catch(() => null)) as TeamActionRequest | null
 
     if (body?.action === "generate") {
-      await assignRandomTeams()
+      await assignBalancedTeams()
     } else if (body?.action === "clear") {
       await resetTeams()
     } else {
