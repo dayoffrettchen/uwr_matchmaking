@@ -117,7 +117,7 @@ export function TeamsPanel({ roster, canManage, trainingId }: { roster: RosterPl
         ) : (
           <>
             {canManage && <p className="mb-3 text-sm text-muted-foreground">Ziehe Spieler per Drag-and-drop in das andere Team, um die Einteilung manuell anzupassen. Danach sollte die faire Einteilung neu berechnet werden.</p>}
-            <div className="grid min-w-0 gap-4 lg:grid-cols-2">
+            <div className="grid min-w-0 gap-4 xl:grid-cols-2">
               <TeamColumn
                 label="Team 1"
                 players={team1}
