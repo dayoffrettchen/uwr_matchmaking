@@ -1,5 +1,10 @@
+import { asc, desc, sql } from "drizzle-orm"
+import { db } from "@/lib/db"
+import { trainings } from "@/lib/db/schema"
+
 const PLANNING_DEADLINE_HOUR = 15
 const TRAINING_TIME_ZONE = "Europe/Berlin"
+const NEXT_TRAINING_INTERVAL_DAYS = 7
 
 function getZonedParts(date: Date) {
   const parts = new Intl.DateTimeFormat("en-CA", {
@@ -36,6 +41,63 @@ function zonedDateTimeToUtcDate(year: number, month: number, day: number, hour: 
   }
 
   return utcDate
+}
+
+function addDaysPreservingZonedTime(date: Date, days: number) {
+  const parts = getZonedParts(date)
+  const targetDay = Date.UTC(parts.year, parts.month - 1, parts.day + days)
+  const targetDate = new Date(targetDay)
+
+  return zonedDateTimeToUtcDate(targetDate.getUTCFullYear(), targetDate.getUTCMonth() + 1, targetDate.getUTCDate(), parts.hour, parts.minute, parts.second)
+}
+
+export function getNextTrainingDate(previousScheduledAt: Date, now = new Date()) {
+  let nextScheduledAt = addDaysPreservingZonedTime(previousScheduledAt, NEXT_TRAINING_INTERVAL_DAYS)
+
+  while (nextScheduledAt.getTime() < now.getTime()) {
+    nextScheduledAt = addDaysPreservingZonedTime(nextScheduledAt, NEXT_TRAINING_INTERVAL_DAYS)
+  }
+
+  return nextScheduledAt
+}
+
+export async function ensureUpcomingTraining(now = new Date()) {
+  const [existingUpcomingTraining] = await db
+    .select()
+    .from(trainings)
+    .where(sql`${trainings.scheduledAt} >= ${now}`)
+    .orderBy(asc(trainings.scheduledAt))
+    .limit(1)
+
+  if (existingUpcomingTraining) return existingUpcomingTraining
+
+  return db.transaction(async (tx) => {
+    await tx.execute(sql`select pg_advisory_xact_lock(hashtext('uwr_matchmaking:ensure_upcoming_training'))`)
+
+    const [upcomingTraining] = await tx
+      .select()
+      .from(trainings)
+      .where(sql`${trainings.scheduledAt} >= ${now}`)
+      .orderBy(asc(trainings.scheduledAt))
+      .limit(1)
+
+    if (upcomingTraining) return upcomingTraining
+
+    const [latestTraining] = await tx.select().from(trainings).orderBy(desc(trainings.scheduledAt)).limit(1)
+    if (!latestTraining) return null
+
+    const [createdTraining] = await tx
+      .insert(trainings)
+      .values({
+        title: latestTraining.title,
+        scheduledAt: getNextTrainingDate(latestTraining.scheduledAt, now),
+        location: latestTraining.location,
+        isOpen: true,
+      })
+      .returning()
+
+    return createdTraining
+  })
 }
 
 export function getTrainingPlanningDeadline(scheduledAt: Date) {

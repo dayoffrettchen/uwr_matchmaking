@@ -4,15 +4,12 @@ import { db } from "@/lib/db"
 import { signups, trainings } from "@/lib/db/schema"
 import { PLAYER_POSITIONS, type PlayerPosition } from "@/lib/ratings/types"
 import { rebuildManualLineup } from "@/lib/matchmaking/balance-teams"
+import { ensureUpcomingTraining } from "@/lib/training/planning"
 import { and, asc, eq, sql } from "drizzle-orm"
 
 async function getOpenTraining() {
-  const [training] = await db
-    .select()
-    .from(trainings)
-    .where(sql`${trainings.isOpen} = true and ${trainings.scheduledAt} >= ${new Date()}`)
-    .orderBy(asc(trainings.scheduledAt))
-    .limit(1)
+  await ensureUpcomingTraining()
+  const [training] = await db.select().from(trainings).where(sql`${trainings.isOpen} = true and ${trainings.scheduledAt} >= ${new Date()}`).orderBy(asc(trainings.scheduledAt)).limit(1)
 
   return training ?? null
 }

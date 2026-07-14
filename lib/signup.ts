@@ -1,6 +1,7 @@
 import { db } from "@/lib/db"
 import { messages, players, signups, trainings } from "@/lib/db/schema"
 import { initializePlayerRatings } from "@/lib/players/initialize-ratings"
+import { ensureUpcomingTraining } from "@/lib/training/planning"
 import { and, asc, eq, sql } from "drizzle-orm"
 
 // Phrases that count as "I'm coming" / present.
@@ -11,12 +12,8 @@ export function isPresentMessage(body: string): boolean {
 }
 
 export async function getOpenTraining() {
-  const [training] = await db
-    .select()
-    .from(trainings)
-    .where(sql`${trainings.isOpen} = true and ${trainings.scheduledAt} >= ${new Date()}`)
-    .orderBy(asc(trainings.scheduledAt))
-    .limit(1)
+  await ensureUpcomingTraining()
+  const [training] = await db.select().from(trainings).where(sql`${trainings.isOpen} = true and ${trainings.scheduledAt} >= ${new Date()}`).orderBy(asc(trainings.scheduledAt)).limit(1)
   return training ?? null
 }
 

@@ -6,6 +6,7 @@ import { assignBalancedTeams } from "@/lib/matchmaking/balance-teams"
 import { PLAYER_POSITIONS, type PlayerPosition } from "@/lib/ratings/types"
 import { db } from "@/lib/db"
 import { trainings } from "@/lib/db/schema"
+import { ensureUpcomingTraining } from "@/lib/training/planning"
 import { asc, eq, sql } from "drizzle-orm"
 
 type TeamActionRequest = {
@@ -23,6 +24,8 @@ export async function POST(request: Request) {
     const body = (await request.json().catch(() => null)) as TeamActionRequest | null
 
     const trainingId = Number.isInteger(body?.trainingId) ? body?.trainingId : undefined
+
+    if (!trainingId) await ensureUpcomingTraining()
 
     const [training] = trainingId
       ? await db.select().from(trainings).where(eq(trainings.id, trainingId)).limit(1)
