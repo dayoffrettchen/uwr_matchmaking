@@ -13,7 +13,7 @@ export const STARTING_LINEUP_STRENGTH_WEIGHT = 8
 export const POSITION_STRENGTH_WEIGHT = 6
 export const ROTATION_GROUP_MATCH_WEIGHT = 6
 export const ROTATION_SPREAD_WEIGHT = 3
-export const POSITION_PREFERENCE_WEIGHT = 20
+export const POSITION_PREFERENCE_WEIGHT = 200
 
 export const OBJECTIVE_WEIGHTS = {
   activePlayerCountDifference: 100_000,

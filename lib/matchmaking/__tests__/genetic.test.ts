@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 import { PLAYER_POSITIONS, type PlayerPosition } from "@/lib/ratings/types"
 import { balanceMatchmakingPlayers } from "../balance-teams"
 import { fromDraftAssignments } from "../candidate"
+import { OBJECTIVE_WEIGHTS } from "../constants"
 import { evaluateCandidate, getPositionPenalty } from "../fitness"
 import { buildGreedySeed } from "../greedy"
 import type { MatchmakingPlayer } from "../types"
@@ -92,6 +93,16 @@ describe("genetisches Matchmaking", () => {
     expect(getPositionPenalty(p, "defender")).toBeGreaterThan(0)
     expect(Number.isFinite(getPositionPenalty(p, "forward"))).toBe(true)
     expect(getPositionPenalty({ ...p, eligiblePositions: ["goalkeeper"] }, "forward")).toBeGreaterThan(100_000)
+  })
+
+  it("gewichtet die Hauptposition stärker als kleine Rating-Vorteile auf Nebenpositionen", () => {
+    const p = player(100, "Flex", { goalkeeper: 1000, defender: 1008, forward: 1015 }, ["goalkeeper", "defender", "forward"], ["goalkeeper", "defender", "forward"])
+    const mainPositionCost = getPositionPenalty(p, "goalkeeper") * OBJECTIVE_WEIGHTS.positionPreference - p.ratings.goalkeeper
+    const secondaryPositionCost = getPositionPenalty(p, "defender") * OBJECTIVE_WEIGHTS.positionPreference - p.ratings.defender
+    const tertiaryPositionCost = getPositionPenalty(p, "forward") * OBJECTIVE_WEIGHTS.positionPreference - p.ratings.forward
+
+    expect(mainPositionCost).toBeLessThan(secondaryPositionCost)
+    expect(mainPositionCost).toBeLessThan(tertiaryPositionCost)
   })
 
   it("hält Kandidatenlimit und best-found Optimalität ein", () => {
