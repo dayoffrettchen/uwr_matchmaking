@@ -1,5 +1,5 @@
 import { db } from "@/lib/db"
-import { players, playerPositionRatings } from "@/lib/db/schema"
+import { matches, matchPlayers, players, playerPositionRatings } from "@/lib/db/schema"
 import { asc, desc, eq, sql } from "drizzle-orm"
 import { PLAYER_POSITIONS, type PlayerPosition } from "@/lib/ratings/types"
 import { DEFAULT_RATING } from "@/lib/ratings/constants"
@@ -37,10 +37,22 @@ export async function listPlayersWithRatings() {
     .leftJoin(playerPositionRatings, eq(playerPositionRatings.playerId, players.id))
     .orderBy(desc(players.createdAt), asc(players.name), asc(playerPositionRatings.preferenceOrder), asc(playerPositionRatings.position))
 
-  const grouped = new Map<number, { id: number; name: string; phone: string | null; ratings: Record<PlayerPosition, any> }>()
+  const lastMatches = await db
+    .select({
+      playerId: matchPlayers.playerId,
+      lastMatchAt: sql<Date | null>`max(${matches.playedAt})`,
+    })
+    .from(matchPlayers)
+    .innerJoin(matches, eq(matches.id, matchPlayers.matchId))
+    .where(eq(matches.status, "finalized"))
+    .groupBy(matchPlayers.playerId)
+
+  const lastMatchByPlayer = new Map(lastMatches.map((match) => [match.playerId, match.lastMatchAt]))
+
+  const grouped = new Map<number, { id: number; name: string; phone: string | null; lastMatchAt: Date | null; ratings: Record<PlayerPosition, any> }>()
   for (const row of rows) {
     if (!grouped.has(row.playerId)) {
-      grouped.set(row.playerId, { id: row.playerId, name: row.name, phone: row.phone, ratings: {} as Record<PlayerPosition, any> })
+      grouped.set(row.playerId, { id: row.playerId, name: row.name, phone: row.phone, lastMatchAt: lastMatchByPlayer.get(row.playerId) ?? null, ratings: {} as Record<PlayerPosition, any> })
     }
     if (row.position && PLAYER_POSITIONS.includes(row.position as PlayerPosition)) {
       grouped.get(row.playerId)!.ratings[row.position as PlayerPosition] = row
@@ -60,6 +72,10 @@ export async function listPlayersWithRatings() {
 
     if (aNeedsReview !== bNeedsReview) return aNeedsReview ? -1 : 1
     if (aHasPosition !== bHasPosition) return aHasPosition ? 1 : -1
+
+    const aLastMatch = a.lastMatchAt?.getTime() ?? 0
+    const bLastMatch = b.lastMatchAt?.getTime() ?? 0
+    if (aLastMatch !== bLastMatch) return aLastMatch - bLastMatch
 
     return a.name.localeCompare(b.name, "de")
   })

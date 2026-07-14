@@ -22,10 +22,13 @@ type Rating = {
 type PlayerWithRatings = {
   id: number
   name: string
+  lastMatchAt: Date | null
   ratings: Record<PlayerPosition, Rating>
 }
 
 const initialState: UpdatePlayerPositionRatingState = { ok: false }
+
+const lastMatchFormatter = new Intl.DateTimeFormat("de-DE", { dateStyle: "medium" })
 
 function getPositionReview(player: PlayerWithRatings) {
   const mainPosition = PLAYER_POSITIONS.find((position) => player.ratings[position].preferenceOrder === 1)
@@ -47,6 +50,7 @@ export function PlayerRatingCard({ player, canManage }: { player: PlayerWithRati
   const enabled = PLAYER_POSITIONS.filter((position) => player.ratings[position].isEligible)
   const main = PLAYER_POSITIONS.find((position) => player.ratings[position].preferenceOrder === 1)
   const positionReview = getPositionReview(player)
+  const lastMatchLabel = player.lastMatchAt ? lastMatchFormatter.format(new Date(player.lastMatchAt)) : "Noch kein Match"
 
   return (
     <Card>
@@ -56,7 +60,7 @@ export function PlayerRatingCard({ player, canManage }: { player: PlayerWithRati
           {enabled.length === 0 && <Badge variant="destructive">Keine Position</Badge>}
         </CardTitle>
         <p className="text-sm text-muted-foreground">
-          Hauptposition: {main ? POSITION_LABELS[main] : "Nicht gesetzt"}
+          Hauptposition: {main ? POSITION_LABELS[main] : "Nicht gesetzt"} · Letztes Match: {lastMatchLabel}
         </p>
         {positionReview && (
           <p className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
