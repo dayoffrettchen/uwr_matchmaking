@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { db } from "@/lib/db"
-import { playerPositionPreferences } from "@/lib/db/schema"
+import { playerPositionPreferences, playerPositionRatings } from "@/lib/db/schema"
 import { getSessionUser } from "@/lib/auth/server"
 import { ensureCurrentPlayerProfile } from "@/lib/players/ensure-profile"
 import { PLAYER_POSITIONS, POSITION_LABELS } from "@/lib/ratings/types"
@@ -21,12 +21,20 @@ export default async function ProfilePage() {
   if (!user) redirect("/sign-in")
 
   const player = await ensureCurrentPlayerProfile(user)
-  const preferences = await db
-    .select()
-    .from(playerPositionPreferences)
-    .where(eq(playerPositionPreferences.playerId, player.id))
-    .orderBy(asc(playerPositionPreferences.preferenceOrder))
-  const selected = new Set(preferences.map((preference) => preference.position))
+  const [preferences, ratings] = await Promise.all([
+    db
+      .select()
+      .from(playerPositionPreferences)
+      .where(eq(playerPositionPreferences.playerId, player.id))
+      .orderBy(asc(playerPositionPreferences.preferenceOrder)),
+    db
+      .select()
+      .from(playerPositionRatings)
+      .where(eq(playerPositionRatings.playerId, player.id))
+      .orderBy(asc(playerPositionRatings.preferenceOrder)),
+  ])
+  const eligibleRatings = ratings.filter((rating) => rating.isEligible)
+  const selected = new Set((eligibleRatings.length > 0 ? eligibleRatings : preferences).map((preference) => preference.position))
 
   return (
     <main className="mx-auto flex min-h-screen max-w-3xl flex-col gap-6 px-4 py-8">
