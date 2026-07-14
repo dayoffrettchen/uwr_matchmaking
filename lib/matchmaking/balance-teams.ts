@@ -1,6 +1,5 @@
 import { and, asc, eq, inArray } from "drizzle-orm"
 import { db } from "@/lib/db"
-import { ensureDatabaseSchema } from "@/lib/db/ensure-schema"
 import { players, playerPositionRatings, signups, trainings } from "@/lib/db/schema"
 import { getRatingConfidence, getRatingStatus } from "@/lib/ratings/confidence"
 import { PLAYER_POSITIONS, type PlayerPosition } from "@/lib/ratings/types"
@@ -72,7 +71,6 @@ export function balanceMatchmakingPlayers(input: MatchmakingPlayer[]): Matchmaki
 }
 
 export async function assignBalancedTeams(): Promise<MatchmakingResult | null> {
-  await ensureDatabaseSchema()
   const [training] = await db.select().from(trainings).where(eq(trainings.isOpen, true)).limit(1)
   if (!training) return null
   const signupRows = await db.select({ signupId: signups.id, playerId: players.id, name: players.name }).from(signups).innerJoin(players, eq(players.id, signups.playerId)).where(eq(signups.trainingId, training.id)).orderBy(asc(signups.createdAt))

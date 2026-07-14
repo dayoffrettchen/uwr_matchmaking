@@ -1,12 +1,10 @@
 import { db } from "@/lib/db"
-import { ensureDatabaseSchema } from "@/lib/db/ensure-schema"
 import { players, playerPositionRatings } from "@/lib/db/schema"
 import { asc, eq, sql } from "drizzle-orm"
 import { PLAYER_POSITIONS, type PlayerPosition } from "@/lib/ratings/types"
 import { DEFAULT_RATING } from "@/lib/ratings/constants"
 
 export async function listPlayersWithRatings() {
-  await ensureDatabaseSchema()
   const rows = await db
     .select({
       playerId: players.id,
@@ -45,7 +43,6 @@ export async function listPlayersWithRatings() {
 }
 
 export async function listRanking(position: PlayerPosition) {
-  await ensureDatabaseSchema()
   return db
     .select({ playerId: players.id, name: players.name, rating: playerPositionRatings.rating, gamesPlayed: playerPositionRatings.gamesPlayed, wins: playerPositionRatings.wins, draws: playerPositionRatings.draws, losses: playerPositionRatings.losses, isEligible: playerPositionRatings.isEligible })
     .from(playerPositionRatings)
