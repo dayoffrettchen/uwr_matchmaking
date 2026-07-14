@@ -32,7 +32,7 @@ export function TeamsPanel({ roster, canManage, trainingId }: { roster: RosterPl
   const [pendingAction, setPendingAction] = useState<TeamAction | null>(null)
   const [movingSignupId, setMovingSignupId] = useState<number | null>(null)
   const [draggedSignupId, setDraggedSignupId] = useState<number | null>(null)
-  const [dragTargetTeam, setDragTargetTeam] = useState<TeamNumber | null>(null)
+  const [dragTarget, setDragTarget] = useState<{ team: TeamNumber; position: PlayerPosition } | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   const teamsAssigned = roster.some((p) => p.team !== null)
@@ -54,36 +54,36 @@ export function TeamsPanel({ roster, canManage, trainingId }: { roster: RosterPl
     }
   }
 
-  async function movePlayer(signupId: number, team: TeamNumber) {
+  async function movePlayer(signupId: number, team: TeamNumber, position: PlayerPosition) {
     const player = roster.find((item) => item.signupId === signupId)
-    if (!player || player.team === team || !canManage || isMutating) return
+    if (!player || (player.team === team && player.assignedPosition === position) || !canManage || isMutating) return
 
     setMovingSignupId(signupId)
     setError(null)
 
     try {
-      await postTeamAction({ action: "move", trainingId, signupId, team })
+      await postTeamAction({ action: "move", trainingId, signupId, team, position })
       startTransition(() => router.refresh())
     } catch (err) {
       setError(err instanceof Error ? err.message : "Der Spieler konnte nicht verschoben werden. Bitte versuche es erneut.")
     } finally {
       setMovingSignupId(null)
       setDraggedSignupId(null)
-      setDragTargetTeam(null)
+      setDragTarget(null)
     }
   }
 
-  function handleDragOver(event: DragEvent, team: TeamNumber) {
+  function handleDragOver(event: DragEvent, team: TeamNumber, position: PlayerPosition) {
     if (!canManage || !draggedSignupId || isMutating) return
     event.preventDefault()
     event.dataTransfer.dropEffect = "move"
-    setDragTargetTeam(team)
+    setDragTarget({ team, position })
   }
 
-  function handleDrop(event: DragEvent, team: TeamNumber) {
+  function handleDrop(event: DragEvent, team: TeamNumber, position: PlayerPosition) {
     event.preventDefault()
     const signupId = Number(event.dataTransfer.getData("text/plain") || draggedSignupId)
-    if (Number.isInteger(signupId)) void movePlayer(signupId, team)
+    if (Number.isInteger(signupId)) void movePlayer(signupId, team, position)
   }
 
   return (
@@ -116,7 +116,7 @@ export function TeamsPanel({ roster, canManage, trainingId }: { roster: RosterPl
           </p>
         ) : (
           <>
-            {canManage && <p className="mb-3 text-sm text-muted-foreground">Ziehe Spieler per Drag-and-drop in das andere Team, um die Einteilung manuell anzupassen. Danach sollte die faire Einteilung neu berechnet werden.</p>}
+            {canManage && <p className="mb-3 text-sm text-muted-foreground">Ziehe Spieler per Drag-and-drop auf eine Position, um Team und Position manuell anzupassen. Die Wechselgruppen werden danach automatisch neu berechnet.</p>}
             <div className="grid min-w-0 gap-4 xl:grid-cols-2">
               <TeamColumn
                 label="Team 1"
@@ -124,12 +124,12 @@ export function TeamsPanel({ roster, canManage, trainingId }: { roster: RosterPl
                 variant="primary"
                 canManage={canManage}
                 movingSignupId={movingSignupId}
-                isDropTarget={dragTargetTeam === 1}
+                dragTarget={dragTarget?.team === 1 ? dragTarget.position : null}
                 onDragStart={setDraggedSignupId}
-                onDragEnd={() => { setDraggedSignupId(null); setDragTargetTeam(null) }}
-                onDragOver={(event) => handleDragOver(event, 1)}
-                onDragLeave={() => setDragTargetTeam(null)}
-                onDrop={(event) => handleDrop(event, 1)}
+                onDragEnd={() => { setDraggedSignupId(null); setDragTarget(null) }}
+                onPositionDragOver={(event, position) => handleDragOver(event, 1, position)}
+                onPositionDragLeave={() => setDragTarget(null)}
+                onPositionDrop={(event, position) => handleDrop(event, 1, position)}
               />
               <TeamColumn
                 label="Team 2"
@@ -137,12 +137,12 @@ export function TeamsPanel({ roster, canManage, trainingId }: { roster: RosterPl
                 variant="accent"
                 canManage={canManage}
                 movingSignupId={movingSignupId}
-                isDropTarget={dragTargetTeam === 2}
+                dragTarget={dragTarget?.team === 2 ? dragTarget.position : null}
                 onDragStart={setDraggedSignupId}
-                onDragEnd={() => { setDraggedSignupId(null); setDragTargetTeam(null) }}
-                onDragOver={(event) => handleDragOver(event, 2)}
-                onDragLeave={() => setDragTargetTeam(null)}
-                onDrop={(event) => handleDrop(event, 2)}
+                onDragEnd={() => { setDraggedSignupId(null); setDragTarget(null) }}
+                onPositionDragOver={(event, position) => handleDragOver(event, 2, position)}
+                onPositionDragLeave={() => setDragTarget(null)}
+                onPositionDrop={(event, position) => handleDrop(event, 2, position)}
               />
             </div>
           </>
@@ -172,24 +172,24 @@ function TeamColumn({
   variant,
   canManage,
   movingSignupId,
-  isDropTarget,
+  dragTarget,
   onDragStart,
   onDragEnd,
-  onDragOver,
-  onDragLeave,
-  onDrop,
+  onPositionDragOver,
+  onPositionDragLeave,
+  onPositionDrop,
 }: {
   label: string
   players: RosterPlayer[]
   variant: "primary" | "accent"
   canManage: boolean
   movingSignupId: number | null
-  isDropTarget: boolean
+  dragTarget: PlayerPosition | null
   onDragStart: (signupId: number) => void
   onDragEnd: () => void
-  onDragOver: (event: DragEvent<HTMLDivElement>) => void
-  onDragLeave: () => void
-  onDrop: (event: DragEvent<HTMLDivElement>) => void
+  onPositionDragOver: (event: DragEvent<HTMLDivElement>, position: PlayerPosition) => void
+  onPositionDragLeave: () => void
+  onPositionDrop: (event: DragEvent<HTMLDivElement>, position: PlayerPosition) => void
 }) {
   const active = players.filter((p) => p.startsInWater ?? p.lineupType !== "substitute").length
   const subs = players.length - active
@@ -197,7 +197,7 @@ function TeamColumn({
   const averageRating = ratedPlayers.length > 0 ? Math.round(ratedPlayers.reduce((sum, player) => sum + player.assignedRating!, 0) / ratedPlayers.length) : null
 
   return (
-    <div className={`min-w-0 overflow-hidden rounded-lg border bg-card transition-colors ${isDropTarget ? "border-primary bg-primary/5" : ""}`} onDragOver={onDragOver} onDragLeave={onDragLeave} onDrop={onDrop}>
+    <div className="min-w-0 overflow-hidden rounded-lg border bg-card transition-colors">
       <div className={`flex flex-col gap-2 rounded-t-lg px-4 py-3 sm:flex-row sm:items-start sm:justify-between ${variant === "primary" ? "bg-primary text-primary-foreground" : "bg-accent text-accent-foreground"}`}>
         <span className="whitespace-nowrap text-lg font-semibold leading-tight">{label}</span>
         <div className="flex flex-wrap gap-2 sm:justify-end">
@@ -206,18 +206,18 @@ function TeamColumn({
         </div>
       </div>
       <div className="grid gap-3 p-3">
-        {PLAYER_POSITIONS.map((position) => <PositionGroups key={position} position={position} players={players.filter((p) => p.assignedPosition === position)} canManage={canManage} movingSignupId={movingSignupId} onDragStart={onDragStart} onDragEnd={onDragEnd} />)}
+        {PLAYER_POSITIONS.map((position) => <PositionGroups key={position} position={position} players={players.filter((p) => p.assignedPosition === position)} canManage={canManage} movingSignupId={movingSignupId} isDropTarget={dragTarget === position} onDragStart={onDragStart} onDragEnd={onDragEnd} onDragOver={(event) => onPositionDragOver(event, position)} onDragLeave={onPositionDragLeave} onDrop={(event) => onPositionDrop(event, position)} />)}
       </div>
     </div>
   )
 }
 
-function PositionGroups({ position, players, canManage, movingSignupId, onDragStart, onDragEnd }: { position: PlayerPosition; players: RosterPlayer[]; canManage: boolean; movingSignupId: number | null; onDragStart: (signupId: number) => void; onDragEnd: () => void }) {
+function PositionGroups({ position, players, canManage, movingSignupId, isDropTarget, onDragStart, onDragEnd, onDragOver, onDragLeave, onDrop }: { position: PlayerPosition; players: RosterPlayer[]; canManage: boolean; movingSignupId: number | null; isDropTarget: boolean; onDragStart: (signupId: number) => void; onDragEnd: () => void; onDragOver: (event: DragEvent<HTMLDivElement>) => void; onDragLeave: () => void; onDrop: (event: DragEvent<HTMLDivElement>) => void }) {
   const grouped = new Map<number, RosterPlayer[]>()
   for (const player of players) grouped.set(player.rotationGroupId ?? player.signupId, [...(grouped.get(player.rotationGroupId ?? player.signupId) ?? []), player])
 
   return (
-    <section>
+    <section className={`rounded-md border border-transparent p-2 transition-colors ${isDropTarget ? "border-primary bg-primary/5" : ""}`} onDragOver={onDragOver} onDragLeave={onDragLeave} onDrop={onDrop}>
       <h3 className="text-sm font-semibold text-muted-foreground">{POSITION_LABELS[position]}</h3>
       <div className="mt-1 grid gap-2">
         {players.length === 0 && <div className="rounded-md border px-3 py-2 text-sm text-muted-foreground">Leer</div>}

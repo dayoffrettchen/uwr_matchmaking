@@ -16,7 +16,7 @@ function getPreferenceOrder(player: MatchmakingPlayer, position: PlayerPosition)
   return eligibleIndex === -1 ? PLAYER_POSITIONS.length + 1 : PLAYER_POSITIONS.length + eligibleIndex + 1
 }
 
-type DraftAssignment = Omit<MatchmakingAssignment, "rotationGroupId" | "rotationGroupType" | "rotationOrder" | "startsInWater" | "lineupType">
+export type DraftAssignment = Omit<MatchmakingAssignment, "rotationGroupId" | "rotationGroupType" | "rotationOrder" | "startsInWater" | "lineupType">
 
 function average(values: number[]): number { return values.reduce((sum, value) => sum + value, 0) / Math.max(1, values.length) }
 function spread(values: number[]): number { return values.length ? Math.max(...values) - Math.min(...values) : 0 }
@@ -45,7 +45,7 @@ function pairings<T>(items: T[]): Array<[T[], T[]]> {
   return [[[items[0], items[1]], [items[2], items[3]]], [[items[0], items[2]], [items[1], items[3]]], [[items[0], items[3]], [items[1], items[2]]]]
 }
 
-function buildRotationGroups(playersBySignup: Map<number, MatchmakingPlayer>, drafts: DraftAssignment[], target: Record<PlayerPosition, number>, warnings: string[]): RotationGroup[] {
+export function buildRotationGroups(playersBySignup: Map<number, MatchmakingPlayer>, drafts: DraftAssignment[], target: Record<PlayerPosition, number>, warnings: string[]): RotationGroup[] {
   const groups: RotationGroup[] = []
   let nextGroupId = 1
   for (const team of [1, 2] as const) for (const position of PLAYER_POSITIONS) {
@@ -74,6 +74,20 @@ function buildRotationGroups(playersBySignup: Map<number, MatchmakingPlayer>, dr
     }
   }
   return groups
+}
+
+function completeAssignments(players: MatchmakingPlayer[], drafts: DraftAssignment[], warnings: string[]): { assignments: MatchmakingAssignment[]; rotationGroups: RotationGroup[] } {
+  const availability = Object.fromEntries(PLAYER_POSITIONS.map((pos) => [pos, players.filter((p) => p.eligiblePositions.includes(pos)).length])) as Record<PlayerPosition, number>
+  const target = getTargetLineup(MAX_ACTIVE_PLAYERS_PER_TEAM, availability)
+  const bySignup = new Map(players.map((p) => [p.signupId, p]))
+  const rotationGroups = buildRotationGroups(bySignup, drafts, target, warnings)
+  const assignments: MatchmakingAssignment[] = drafts.map((draft) => {
+    const group = rotationGroups.find((candidate) => candidate.members.some((member) => member.signupId === draft.signupId))
+    const member = group?.members.find((candidate) => candidate.signupId === draft.signupId)
+    if (!group || !member) throw new Error("Für eine Anmeldung konnte keine Wechselgruppe erstellt werden.")
+    return { ...draft, rotationGroupId: group.id, rotationGroupType: group.type, rotationOrder: member.rotationOrder, startsInWater: member.startsInWater, lineupType: member.startsInWater ? "active" : "substitute" }
+  })
+  return { assignments, rotationGroups }
 }
 
 export function calculateEffectiveTeamStrength(groups: RotationGroup[]): number {
@@ -146,13 +160,7 @@ export function balanceMatchmakingPlayers(input: MatchmakingPlayer[]): Matchmaki
     drafts.push(chosen); teamCounts[chosen.team]++; positionCounts[chosen.team][chosen.position]++; candidatesEvaluated += options.length
   }
   const bySignup = new Map(players.map((p) => [p.signupId, p]))
-  const rotationGroups = buildRotationGroups(bySignup, drafts, target, warnings)
-  const assignments: MatchmakingAssignment[] = drafts.map((draft) => {
-    const group = rotationGroups.find((candidate) => candidate.members.some((member) => member.signupId === draft.signupId))
-    const member = group?.members.find((candidate) => candidate.signupId === draft.signupId)
-    if (!group || !member) throw new Error("Für eine Anmeldung konnte keine Wechselgruppe erstellt werden.")
-    return { ...draft, rotationGroupId: group.id, rotationGroupType: group.type, rotationOrder: member.rotationOrder, startsInWater: member.startsInWater, lineupType: member.startsInWater ? "active" : "substitute" }
-  })
+  const { assignments, rotationGroups } = completeAssignments(players, drafts, warnings)
   for (const team of [1, 2] as const) if (assignments.filter((a) => a.team === team && a.startsInWater).length > MAX_ACTIVE_PLAYERS_PER_TEAM) warnings.push("Mehr als sechs Spieler wurden als aktiv eingeplant.")
   for (const group of rotationGroups.filter((g) => g.type === "triple" && g.ratingSpread > 200)) warnings.push(`Die Dreier-Wechselgruppe ${group.members.map((m) => m.name).join("/")} besitzt eine stark schwankende aktive Paarstärke. Die Elo-Spannweite dieser Wechselgruppe beträgt ${group.ratingSpread} Punkte.`)
   const finalTeam1 = summarize(bySignup, assignments, rotationGroups, 1), finalTeam2 = summarize(bySignup, assignments, rotationGroups, 2)
@@ -162,17 +170,36 @@ export function balanceMatchmakingPlayers(input: MatchmakingPlayer[]): Matchmaki
   return { assignments, rotationGroups, team1: finalTeam1, team2: finalTeam2, warnings, computationTimeMs: Date.now() - started, candidatesEvaluated, optimality: candidatesEvaluated > 10000 ? "best-found" : "exact", quality }
 }
 
+async function loadMatchmakingPlayers(trainingId: number) {
+  const signupRows = await db.select({ signupId: signups.id, playerId: players.id, name: players.name, team: signups.team, assignedPosition: signups.assignedPosition }).from(signups).innerJoin(players, eq(players.id, signups.playerId)).where(eq(signups.trainingId, trainingId)).orderBy(asc(signups.createdAt))
+  const ratings = signupRows.length > 0 ? await db.select().from(playerPositionRatings).where(inArray(playerPositionRatings.playerId, signupRows.map((r) => r.playerId))) : []
+  const matchmakingPlayers = signupRows.map((row) => {
+    const mine = ratings.filter((r) => r.playerId === row.playerId)
+    return { signupId: row.signupId, playerId: row.playerId, name: row.name, eligiblePositions: mine.filter((r) => r.isEligible).map((r) => r.position as PlayerPosition), positionPreferences: mine.filter((r) => r.preferenceOrder).map((r) => ({ position: r.position as PlayerPosition, order: r.preferenceOrder! })), ratings: Object.fromEntries(PLAYER_POSITIONS.map((p) => [p, mine.find((r) => r.position === p)?.rating ?? 1000])) as Record<PlayerPosition, number>, gamesPlayed: Object.fromEntries(PLAYER_POSITIONS.map((p) => [p, mine.find((r) => r.position === p)?.gamesPlayed ?? 0])) as Record<PlayerPosition, number>, confidence: Object.fromEntries(PLAYER_POSITIONS.map((p) => [p, getRatingConfidence(mine.find((r) => r.position === p)?.gamesPlayed ?? 0)])) as Record<PlayerPosition, number> }
+  })
+  return { signupRows, players: matchmakingPlayers }
+}
+
+export async function rebuildManualLineup(trainingId: number) {
+  const { signupRows, players } = await loadMatchmakingPlayers(trainingId)
+  const normalizedPlayers = players.map((p) => p.eligiblePositions.length ? p : { ...p, eligiblePositions: [...PLAYER_POSITIONS], positionPreferences: PLAYER_POSITIONS.map((position, i) => ({ position, order: i + 1 })) })
+  const drafts = signupRows
+    .filter((row): row is typeof row & { team: 1 | 2; assignedPosition: PlayerPosition } => (row.team === 1 || row.team === 2) && PLAYER_POSITIONS.includes(row.assignedPosition as PlayerPosition))
+    .map((row) => ({ signupId: row.signupId, playerId: row.playerId, team: row.team, position: row.assignedPosition }))
+  if (drafts.length === 0) return
+  const warnings: string[] = []
+  const { assignments } = completeAssignments(normalizedPlayers, drafts, warnings)
+  await db.transaction(async (tx) => {
+    for (const assignment of assignments) await tx.update(signups).set({ team: assignment.team, assignedPosition: assignment.position, lineupType: assignment.lineupType, rotationGroupId: assignment.rotationGroupId, rotationGroupType: assignment.rotationGroupType, rotationOrder: assignment.rotationOrder, startsInWater: assignment.startsInWater }).where(and(eq(signups.id, assignment.signupId), eq(signups.trainingId, trainingId)))
+  })
+}
+
 export async function assignBalancedTeams(trainingId?: number): Promise<MatchmakingResult | null> {
   const [training] = trainingId
     ? await db.select().from(trainings).where(eq(trainings.id, trainingId)).limit(1)
     : await db.select().from(trainings).where(eq(trainings.isOpen, true)).limit(1)
   if (!training) return null
-  const signupRows = await db.select({ signupId: signups.id, playerId: players.id, name: players.name }).from(signups).innerJoin(players, eq(players.id, signups.playerId)).where(eq(signups.trainingId, training.id)).orderBy(asc(signups.createdAt))
-  const ratings = await db.select().from(playerPositionRatings).where(inArray(playerPositionRatings.playerId, signupRows.map((r) => r.playerId)))
-  const input = signupRows.map((row) => {
-    const mine = ratings.filter((r) => r.playerId === row.playerId)
-    return { signupId: row.signupId, playerId: row.playerId, name: row.name, eligiblePositions: mine.filter((r) => r.isEligible).map((r) => r.position as PlayerPosition), positionPreferences: mine.filter((r) => r.preferenceOrder).map((r) => ({ position: r.position as PlayerPosition, order: r.preferenceOrder! })), ratings: Object.fromEntries(PLAYER_POSITIONS.map((p) => [p, mine.find((r) => r.position === p)?.rating ?? 1000])) as Record<PlayerPosition, number>, gamesPlayed: Object.fromEntries(PLAYER_POSITIONS.map((p) => [p, mine.find((r) => r.position === p)?.gamesPlayed ?? 0])) as Record<PlayerPosition, number>, confidence: Object.fromEntries(PLAYER_POSITIONS.map((p) => [p, getRatingConfidence(mine.find((r) => r.position === p)?.gamesPlayed ?? 0)])) as Record<PlayerPosition, number> }
-  })
+  const { signupRows, players: input } = await loadMatchmakingPlayers(training.id)
   const beforeIds = signupRows.map((r) => r.signupId).sort().join(",")
   const result = balanceMatchmakingPlayers(input)
   await db.transaction(async (tx) => {

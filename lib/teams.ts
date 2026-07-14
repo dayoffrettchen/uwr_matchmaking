@@ -2,6 +2,8 @@ import "server-only"
 
 import { db } from "@/lib/db"
 import { signups, trainings } from "@/lib/db/schema"
+import { PLAYER_POSITIONS, type PlayerPosition } from "@/lib/ratings/types"
+import { rebuildManualLineup } from "@/lib/matchmaking/balance-teams"
 import { and, desc, eq } from "drizzle-orm"
 
 async function getOpenTraining() {
@@ -39,16 +41,19 @@ export async function assignRandomTeams() {
   }
 }
 
-export async function moveSignupToTeam(params: { signupId: number; team: 1 | 2; trainingId?: number }) {
+export async function moveSignupToTeam(params: { signupId: number; team: 1 | 2; position?: PlayerPosition; trainingId?: number }) {
   const training = params.trainingId
     ? (await db.select().from(trainings).where(eq(trainings.id, params.trainingId)).limit(1))[0]
     : await getOpenTraining()
   if (!training) return
 
+  const position = params.position && PLAYER_POSITIONS.includes(params.position) ? params.position : undefined
+
   await db
     .update(signups)
     .set({
       team: params.team,
+      ...(position ? { assignedPosition: position } : {}),
       lineupType: null,
       rotationGroupId: null,
       rotationGroupType: null,
@@ -56,6 +61,8 @@ export async function moveSignupToTeam(params: { signupId: number; team: 1 | 2; 
       startsInWater: null,
     })
     .where(and(eq(signups.id, params.signupId), eq(signups.trainingId, training.id)))
+
+  await rebuildManualLineup(training.id)
 }
 
 export async function resetTeams(trainingId?: number) {
