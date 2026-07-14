@@ -26,7 +26,12 @@ export function runGeneticOptimization(input: MatchmakingPlayer[], options: Gene
     if (result) { evaluated++; seen.add(hash) }
     return result
   }
-  const greedy = evalOne(fromDraftAssignments(players, buildGreedySeed(players)))!
+  const greedySeed = fromDraftAssignments(players, buildGreedySeed(players))
+  const greedyCandidate = repairCandidate(players, greedySeed) ?? greedySeed
+  const greedy = evaluateCandidate(players, greedyCandidate, "greedy")
+  if (!greedy) throw new Error("Für diese Teilnehmer konnte keine gültige Team-Einteilung erstellt werden.")
+  evaluated = Math.max(evaluated, 1)
+  seen.add(greedy.hash)
   let best = greedy
   const pushEval = (arr: EvaluatedCandidate[], c: Candidate) => {
     const fixed = repairCandidate(players, c)

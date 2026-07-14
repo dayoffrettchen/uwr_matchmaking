@@ -25,12 +25,18 @@ const ASSIGNMENT_CARD_STYLES = {
   1: {
     card: "border-primary/40 bg-primary/10",
     icon: "bg-primary text-primary-foreground",
+    title: "text-muted-foreground",
+    body: "text-foreground",
     team: "text-primary",
+    pill: "bg-background text-foreground",
   },
   2: {
-    card: "border-team-white-border bg-team-white",
+    card: "border-team-white-border bg-team-white text-team-white-foreground",
     icon: "border border-team-white-border bg-team-white text-team-white-foreground",
+    title: "text-team-white-foreground/70",
+    body: "text-team-white-foreground",
     team: "text-team-white-foreground",
+    pill: "bg-background text-foreground",
   },
 } as const
 
@@ -133,8 +139,8 @@ export default async function Page() {
                 <UserRoundCheck className="size-5" aria-hidden />
               </div>
               <div>
-                <p className="text-sm font-medium text-muted-foreground">{t.assignmentTitle}</p>
-                <p className="text-lg font-semibold text-foreground">
+                <p className={`text-sm font-medium ${assignmentStyles.title}`}>{t.assignmentTitle}</p>
+                <p className={`text-lg font-semibold ${assignmentStyles.body}`}>
                   {t.assignmentIntro}{" "}
                   <span className={assignmentStyles.team}>{assignmentTeamLabel}</span>.
                 </p>
@@ -142,12 +148,12 @@ export default async function Page() {
             </div>
             <div className="flex flex-wrap gap-2 sm:justify-end">
               {assignmentPositionLabel && (
-                <span className="rounded-full bg-background px-3 py-1 text-sm font-medium text-foreground shadow-sm">
+                <span className={`rounded-full px-3 py-1 text-sm font-medium shadow-sm ${assignmentStyles.pill}`}>
                   {assignmentPositionLabel}
                 </span>
               )}
               {assignmentLineupLabel && (
-                <span className="rounded-full bg-background px-3 py-1 text-sm font-medium text-foreground shadow-sm">
+                <span className={`rounded-full px-3 py-1 text-sm font-medium shadow-sm ${assignmentStyles.pill}`}>
                   {assignmentLineupLabel}
                 </span>
               )}
