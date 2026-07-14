@@ -27,9 +27,26 @@ type PlayerWithRatings = {
 
 const initialState: UpdatePlayerPositionRatingState = { ok: false }
 
+function getPositionReview(player: PlayerWithRatings) {
+  const mainPosition = PLAYER_POSITIONS.find((position) => player.ratings[position].preferenceOrder === 1)
+  if (!mainPosition) return null
+
+  const mainRating = player.ratings[mainPosition]
+  const betterPosition = PLAYER_POSITIONS
+    .filter((position) => position !== mainPosition)
+    .map((position) => ({ position, rating: player.ratings[position] }))
+    .filter(({ rating }) => rating.isEligible && getRatingConfidence(rating.gamesPlayed) === 1 && rating.rating > mainRating.rating)
+    .sort((a, b) => b.rating.rating - a.rating.rating)[0]
+
+  if (!betterPosition) return null
+
+  return { mainPosition, betterPosition: betterPosition.position, ratingDifference: betterPosition.rating.rating - mainRating.rating }
+}
+
 export function PlayerRatingCard({ player, canManage }: { player: PlayerWithRatings; canManage: boolean }) {
   const enabled = PLAYER_POSITIONS.filter((position) => player.ratings[position].isEligible)
   const main = PLAYER_POSITIONS.find((position) => player.ratings[position].preferenceOrder === 1)
+  const positionReview = getPositionReview(player)
 
   return (
     <Card>
@@ -41,6 +58,11 @@ export function PlayerRatingCard({ player, canManage }: { player: PlayerWithRati
         <p className="text-sm text-muted-foreground">
           Hauptposition: {main ? POSITION_LABELS[main] : "Nicht gesetzt"}
         </p>
+        {positionReview && (
+          <p className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+            Spielerposition überdenken: {POSITION_LABELS[positionReview.betterPosition]} ist bei 100 % Konfidenz um {positionReview.ratingDifference} Ratingpunkte stärker als {POSITION_LABELS[positionReview.mainPosition]}.
+          </p>
+        )}
       </CardHeader>
       <CardContent className="grid gap-3 md:grid-cols-3">
         {PLAYER_POSITIONS.map((position) => {
