@@ -28,11 +28,11 @@ export type EvaluatedCandidate = MatchmakingResult & { fitness: FitnessBreakdown
 export function getPositionPenalty(player: MatchmakingPlayer, position: PlayerPosition): number {
   if (!player.eligiblePositions.includes(position)) return 1_000_000
   const pref = player.positionPreferences.find((entry) => entry.position === position)
-  if (!pref) return 60
+  if (!pref) return 180
   if (pref.order === 1) return 0
-  if (pref.order === 2) return 12
-  if (pref.order === 3) return 28
-  return 45
+  if (pref.order === 2) return 40
+  if (pref.order === 3) return 120
+  return 180
 }
 
 function positionEffective(groups: RotationGroup[], position: PlayerPosition): number {
