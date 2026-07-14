@@ -10,12 +10,18 @@ export async function getDashboardData() {
   const user = await getSessionUser()
   await ensureDatabaseSchema()
 
-  const [training] = await db
+  const [openTraining] = await db
     .select()
     .from(trainings)
     .where(eq(trainings.isOpen, true))
     .orderBy(desc(trainings.scheduledAt))
     .limit(1)
+
+  const [latestTraining] = openTraining
+    ? [openTraining]
+    : await db.select().from(trainings).orderBy(desc(trainings.scheduledAt)).limit(1)
+
+  const training = latestTraining ?? null
 
   if (!training) {
     return { user, training: null, roster: [], recentMessages: [] }

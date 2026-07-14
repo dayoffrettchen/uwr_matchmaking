@@ -70,8 +70,10 @@ export function balanceMatchmakingPlayers(input: MatchmakingPlayer[]): Matchmaki
   return { assignments, team1: finalTeam1, team2: finalTeam2, warnings, computationTimeMs: Date.now() - started, candidatesEvaluated, optimality: candidatesEvaluated > 10000 ? "best-found" : "exact", quality }
 }
 
-export async function assignBalancedTeams(): Promise<MatchmakingResult | null> {
-  const [training] = await db.select().from(trainings).where(eq(trainings.isOpen, true)).limit(1)
+export async function assignBalancedTeams(trainingId?: number): Promise<MatchmakingResult | null> {
+  const [training] = trainingId
+    ? await db.select().from(trainings).where(eq(trainings.id, trainingId)).limit(1)
+    : await db.select().from(trainings).where(eq(trainings.isOpen, true)).limit(1)
   if (!training) return null
   const signupRows = await db.select({ signupId: signups.id, playerId: players.id, name: players.name }).from(signups).innerJoin(players, eq(players.id, signups.playerId)).where(eq(signups.trainingId, training.id)).orderBy(asc(signups.createdAt))
   const ratings = await db.select().from(playerPositionRatings).where(inArray(playerPositionRatings.playerId, signupRows.map((r) => r.playerId)))

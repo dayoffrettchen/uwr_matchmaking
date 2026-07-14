@@ -6,6 +6,7 @@ import { assignBalancedTeams } from "@/lib/matchmaking/balance-teams"
 
 type TeamActionRequest = {
   action?: "generate" | "clear"
+  trainingId?: number
 }
 
 export async function POST(request: Request) {
@@ -14,10 +15,12 @@ export async function POST(request: Request) {
 
     const body = (await request.json().catch(() => null)) as TeamActionRequest | null
 
+    const trainingId = Number.isInteger(body?.trainingId) ? body?.trainingId : undefined
+
     if (body?.action === "generate") {
-      await assignBalancedTeams()
+      await assignBalancedTeams(trainingId)
     } else if (body?.action === "clear") {
-      await resetTeams()
+      await resetTeams(trainingId)
     } else {
       return NextResponse.json({ error: "Unbekannte Team-Aktion" }, { status: 400 })
     }
