@@ -6,10 +6,10 @@ import { BetterAuthReactAdapter } from "@neondatabase/auth/react"
 
 function getAuthBaseUrl() {
   if (typeof window === "undefined") {
-    return "http://localhost"
+    return "http://localhost/api/auth"
   }
 
-  return window.location.origin
+  return new URL("/api/auth", window.location.origin).toString()
 }
 
 export const authClient = createAuthClient(getAuthBaseUrl(), {
