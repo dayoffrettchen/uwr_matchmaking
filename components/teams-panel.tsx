@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { POSITION_LABELS, PLAYER_POSITIONS, type PlayerPosition } from "@/lib/ratings/types"
 import { GripVertical, Shuffle, Users, X } from "lucide-react"
+import type { Locale } from "@/lib/i18n"
 
 type RosterPlayer = {
   signupId: number
@@ -26,8 +27,9 @@ type RosterPlayer = {
 type TeamAction = "generate" | "clear"
 type TeamNumber = 1 | 2
 
-export function TeamsPanel({ roster, canManage, trainingId }: { roster: RosterPlayer[]; canManage: boolean; trainingId?: number }) {
+export function TeamsPanel({ roster, canManage, trainingId, locale = "de" }: { roster: RosterPlayer[]; canManage: boolean; trainingId?: number; locale?: Locale }) {
   const router = useRouter()
+  const t = locale === "de" ? { reset: "Zurücksetzen", resetting: "Setze zurück …", generate: "Teams fair einteilen", generating: "Teile ein …", min: "Mindestens 2 Anmeldungen nötig, um Teams einzuteilen.", none: "Noch keine Teams eingeteilt. Tippe auf „Teams fair einteilen“, um positionsbasiert faire Teams zu bilden.", hint: "Ziehe Spieler per Drag-and-drop auf eine Position, um Team und Position manuell anzupassen. Die Wechselgruppen werden danach automatisch neu berechnet.", actionFailed: "Die Team-Aktion ist fehlgeschlagen. Bitte versuche es erneut.", moveFailed: "Der Spieler konnte nicht verschoben werden. Bitte versuche es erneut." } : { reset: "Reset", resetting: "Resetting …", generate: "Assign fair teams", generating: "Assigning …", min: "At least 2 signups are needed to assign teams.", none: "No teams assigned yet. Tap “Assign fair teams” to create position-based fair teams.", hint: "Drag players onto a position to adjust team and position manually. Rotation groups are recalculated afterwards.", actionFailed: "The team action failed. Please try again.", moveFailed: "The player could not be moved. Please try again." }
   const [isPending, startTransition] = useTransition()
   const [pendingAction, setPendingAction] = useState<TeamAction | null>(null)
   const [movingSignupId, setMovingSignupId] = useState<number | null>(null)
@@ -48,7 +50,7 @@ export function TeamsPanel({ roster, canManage, trainingId }: { roster: RosterPl
       await postTeamAction({ action, trainingId })
       startTransition(() => router.refresh())
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Die Team-Aktion ist fehlgeschlagen. Bitte versuche es erneut.")
+      setError(err instanceof Error ? err.message : t.actionFailed)
     } finally {
       setPendingAction(null)
     }
@@ -65,7 +67,7 @@ export function TeamsPanel({ roster, canManage, trainingId }: { roster: RosterPl
       await postTeamAction({ action: "move", trainingId, signupId, team, position })
       startTransition(() => router.refresh())
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Der Spieler konnte nicht verschoben werden. Bitte versuche es erneut.")
+      setError(err instanceof Error ? err.message : t.moveFailed)
     } finally {
       setMovingSignupId(null)
       setDraggedSignupId(null)
@@ -98,12 +100,12 @@ export function TeamsPanel({ roster, canManage, trainingId }: { roster: RosterPl
             {teamsAssigned && (
               <Button type="button" variant="ghost" size="sm" disabled={isMutating} onClick={() => void runTeamAction("clear")}>
                 <X className="size-4" aria-hidden />
-                {pendingAction === "clear" ? "Setze zurück …" : "Zurücksetzen"}
+                {pendingAction === "clear" ? t.resetting : t.reset}
               </Button>
             )}
             <Button type="button" size="sm" disabled={isMutating || roster.length < 2} onClick={() => void runTeamAction("generate")}>
               <Shuffle className="size-4" aria-hidden />
-              {pendingAction === "generate" ? "Teile ein …" : "Teams fair einteilen"}
+              {pendingAction === "generate" ? t.generating : t.generate}
             </Button>
           </div>
         )}
@@ -112,11 +114,11 @@ export function TeamsPanel({ roster, canManage, trainingId }: { roster: RosterPl
         {error && <p className="mb-4 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p>}
         {!teamsAssigned ? (
           <p className="text-sm text-muted-foreground text-pretty">
-            {roster.length < 2 ? "Mindestens 2 Anmeldungen nötig, um Teams einzuteilen." : "Noch keine Teams eingeteilt. Tippe auf „Teams fair einteilen“, um positionsbasiert faire Teams zu bilden."}
+            {roster.length < 2 ? t.min : t.none}
           </p>
         ) : (
           <>
-            {canManage && <p className="mb-3 text-sm text-muted-foreground">Ziehe Spieler per Drag-and-drop auf eine Position, um Team und Position manuell anzupassen. Die Wechselgruppen werden danach automatisch neu berechnet.</p>}
+            {canManage && <p className="mb-3 text-sm text-muted-foreground">{t.hint}</p>}
             <div className="grid min-w-0 gap-4 xl:grid-cols-2">
               <TeamColumn
                 label="Team 1"
@@ -162,7 +164,7 @@ async function postTeamAction(body: Record<string, unknown>) {
 
   if (!response.ok || response.type === "opaqueredirect") {
     const data = await response.json().catch(() => null)
-    throw new Error(typeof data?.error === "string" ? data.error : "Die Team-Aktion ist fehlgeschlagen. Bitte versuche es erneut.")
+    throw new Error(typeof data?.error === "string" ? data.error : t.actionFailed)
   }
 }
 

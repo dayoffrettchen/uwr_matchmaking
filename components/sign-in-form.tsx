@@ -4,6 +4,7 @@ import { useState } from "react"
 import { Waves } from "lucide-react"
 
 import { authClient } from "@/lib/auth/client"
+import type { Locale } from "@/lib/i18n"
 import { Button } from "@/components/ui/button"
 import {
   Card,
@@ -15,12 +16,15 @@ import {
 
 export function SignInForm({
   hasError = false,
+  locale = "de",
 }: {
   hasError?: boolean
+  locale?: Locale
 }) {
+  const t = locale === "de" ? { failed: "Anmeldung fehlgeschlagen. Bitte erneut versuchen.", title: "Mit Google anmelden", description: "Melde dich mit deinem Google-Konto an, um dein Spielerprofil zu verwalten und dich zu Trainings anzumelden.", loading: "Anmeldung wird gestartet …", signIn: "Mit Google anmelden" } : { failed: "Sign-in failed. Please try again.", title: "Sign in with Google", description: "Sign in with your Google account to manage your player profile and sign up for training sessions.", loading: "Starting sign-in …", signIn: "Sign in with Google" }
   const [isLoading, setIsLoading] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(
-    hasError ? "Anmeldung fehlgeschlagen. Bitte erneut versuchen." : null,
+    hasError ? t.failed : null,
   )
 
   async function handleGoogleSignIn() {
@@ -53,10 +57,10 @@ export function SignInForm({
           <Waves className="size-6" aria-hidden />
         </div>
 
-        <CardTitle className="text-xl">Mit Google anmelden</CardTitle>
+        <CardTitle className="text-xl">{t.title}</CardTitle>
 
         <CardDescription>
-          Melde dich mit deinem Google-Konto an, um dein Spielerprofil zu verwalten und dich zu Trainings anzumelden.
+          {t.description}
         </CardDescription>
       </CardHeader>
 
@@ -71,8 +75,8 @@ export function SignInForm({
           <GoogleMark />
 
           {isLoading
-            ? "Anmeldung wird gestartet …"
-            : "Mit Google anmelden"}
+            ? t.loading
+            : t.signIn}
         </Button>
 
         {errorMessage && (

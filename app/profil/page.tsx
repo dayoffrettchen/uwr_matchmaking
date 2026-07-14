@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation"
+import { getLocale } from "@/lib/i18n-server"
 import { eq, asc } from "drizzle-orm"
 
 import { AppNavigation } from "@/components/app-navigation"
@@ -15,6 +16,7 @@ import { saveOwnProfile } from "@/app/profil/actions"
 export const dynamic = "force-dynamic"
 
 export default async function ProfilePage() {
+  const locale = await getLocale()
   const user = await getSessionUser()
   if (!user) redirect("/sign-in")
 
@@ -28,7 +30,7 @@ export default async function ProfilePage() {
 
   return (
     <main className="mx-auto flex min-h-screen max-w-3xl flex-col gap-6 px-4 py-8">
-      <AppNavigation role={user.role} />
+      <AppNavigation role={user.role} locale={locale} />
       <Card>
         <CardHeader>
           <CardTitle>Mein Profil</CardTitle>
