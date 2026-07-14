@@ -39,7 +39,14 @@ export async function listPlayersWithRatings() {
       player.ratings[position] ??= { position, rating: DEFAULT_RATING, initialRating: DEFAULT_RATING, gamesPlayed: 0, wins: 0, draws: 0, losses: 0, isEligible: false, preferenceOrder: null }
     }
   }
-  return [...grouped.values()]
+  return [...grouped.values()].sort((a, b) => {
+    const aHasPosition = PLAYER_POSITIONS.some((position) => a.ratings[position].isEligible)
+    const bHasPosition = PLAYER_POSITIONS.some((position) => b.ratings[position].isEligible)
+
+    if (aHasPosition !== bHasPosition) return aHasPosition ? 1 : -1
+
+    return a.name.localeCompare(b.name, "de")
+  })
 }
 
 export async function listRanking(position: PlayerPosition) {
