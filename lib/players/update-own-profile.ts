@@ -3,7 +3,7 @@ import "server-only"
 import { eq } from "drizzle-orm"
 
 import { db } from "@/lib/db"
-import { playerPositionPreferences, players } from "@/lib/db/schema"
+import { playerPositionPreferences, playerPositionRatings, players } from "@/lib/db/schema"
 import { requireCurrentPlayer } from "@/lib/players/current-player"
 import { PLAYER_POSITIONS, type PlayerPosition } from "@/lib/ratings/types"
 
@@ -43,5 +43,27 @@ export async function updateOwnProfile(input: UpdateOwnProfileInput): Promise<vo
         preferenceOrder: index + 1,
       })),
     )
+
+    for (const position of PLAYER_POSITIONS) {
+      const preferenceIndex = preferredPositions.indexOf(position)
+      const preferenceOrder = preferenceIndex === -1 ? null : preferenceIndex + 1
+
+      await tx
+        .insert(playerPositionRatings)
+        .values({
+          playerId: currentPlayer.id,
+          position,
+          isEligible: preferenceOrder !== null,
+          preferenceOrder,
+        })
+        .onConflictDoUpdate({
+          target: [playerPositionRatings.playerId, playerPositionRatings.position],
+          set: {
+            isEligible: preferenceOrder !== null,
+            preferenceOrder,
+            updatedAt: new Date(),
+          },
+        })
+    }
   })
 }
