@@ -31,7 +31,7 @@ export function SignInForm({
       const result = await authClient.signIn.social({
         provider: "google",
 
-        callbackURL: window.location.origin,
+        callbackURL: "/",
       })
 
       if (result?.error) {
@@ -106,7 +106,7 @@ function formatAuthError(error: unknown): string {
     searchableText.includes("INVALID_ORIGIN") ||
     searchableText.includes("ORIGIN")
   ) {
-    return "Diese Domain ist für die Anmeldung nicht freigegeben."
+    return authDomainConfigMessage()
   }
 
   if (
@@ -114,7 +114,7 @@ function formatAuthError(error: unknown): string {
     searchableText.includes("INVALID_CALLBACKURL") ||
     searchableText.includes("CALLBACK")
   ) {
-    return "Die Rücksprungadresse für die Anmeldung wurde abgelehnt."
+    return authDomainConfigMessage()
   }
 
   if (
@@ -125,7 +125,7 @@ function formatAuthError(error: unknown): string {
     searchableText.includes("OAUTH_PROVIDER_DISABLED") ||
     (searchableText.includes("PROVIDER") && searchableText.includes("DISABLED"))
   ) {
-    return "Google ist als Anmeldeanbieter nicht aktiviert."
+    return "Google-Anmeldung ist in Neon Auth für Produktion nicht vollständig konfiguriert."
   }
 
   if (
@@ -133,7 +133,7 @@ function formatAuthError(error: unknown): string {
     details.statusCode === 403 ||
     searchableText.includes("FORBIDDEN")
   ) {
-    return "Neon Auth hat die Anmeldung abgelehnt. Bitte Konfiguration prüfen."
+    return "Neon Auth hat die Anmeldung abgelehnt. Bitte Domains und Google-OAuth in Neon prüfen."
   }
 
   if (
@@ -144,6 +144,12 @@ function formatAuthError(error: unknown): string {
   }
 
   return "Die Google-Anmeldung konnte nicht gestartet werden."
+}
+
+function authDomainConfigMessage(): string {
+  const origin = typeof window !== "undefined" ? window.location.origin : "diese Domain"
+
+  return `${origin} ist in Neon Auth nicht als vertrauenswürdige Domain freigegeben.`
 }
 
 function logAuthError(label: string, error: unknown) {

@@ -20,7 +20,7 @@ function getSignOutError(result: SignOutResult) {
   }
 
   if (response.error) {
-    return response.error.message ?? "Abmeldung fehlgeschlagen."
+    return formatSignOutError(response.error.message)
   }
 
   if (response.data && response.data.success === false) {
@@ -28,6 +28,20 @@ function getSignOutError(result: SignOutResult) {
   }
 
   return null
+}
+
+function formatSignOutError(message?: string) {
+  const fallback = "Abmeldung fehlgeschlagen."
+
+  if (!message) {
+    return fallback
+  }
+
+  if (message.toUpperCase().includes("INVALID ORIGIN")) {
+    return "Diese Domain ist in Neon Auth nicht freigegeben."
+  }
+
+  return message
 }
 
 export function UserMenu({
@@ -48,9 +62,8 @@ export function UserMenu({
     setSignOutError(null)
 
     try {
-      const callbackURL = new URL("/sign-in", window.location.origin).toString()
       const result = await signOut({
-        callbackURL,
+        callbackURL: "/sign-in",
       } as Parameters<typeof signOut>[0] & { callbackURL: string })
       const error = getSignOutError(result)
 
@@ -64,7 +77,7 @@ export function UserMenu({
       router.refresh()
     } catch (error) {
       console.error("Sign-out failed", error)
-      setSignOutError(error instanceof Error ? error.message : "Abmeldung fehlgeschlagen.")
+      setSignOutError(formatSignOutError(error instanceof Error ? error.message : undefined))
     } finally {
       setIsSigningOut(false)
     }
