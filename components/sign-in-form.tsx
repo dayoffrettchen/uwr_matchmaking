@@ -35,12 +35,12 @@ export function SignInForm({
       })
 
       if (result?.error) {
-        console.error("Google login failed:", result.error)
+        logAuthError("Google login failed", result.error)
         setErrorMessage(formatAuthError(result.error))
         setIsLoading(false)
       }
     } catch (error) {
-      console.error("Google login failed:", error)
+      logAuthError("Google login failed", error)
       setErrorMessage(formatAuthError(error))
       setIsLoading(false)
     }
@@ -89,17 +89,134 @@ export function SignInForm({
 }
 
 function formatAuthError(error: unknown): string {
-  const message = error instanceof Error ? error.message : String(error)
+  const details = getAuthErrorDetails(error)
+  const searchableText = [
+    details.code,
+    details.message,
+    details.status,
+    details.statusCode,
+    details.responseBody,
+    details.raw,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toUpperCase()
 
-  if (message.includes("INVALID_CALLBACKURL")) {
+  if (
+    searchableText.includes("INVALID_ORIGIN") ||
+    searchableText.includes("ORIGIN")
+  ) {
+    return "Diese Domain ist für die Anmeldung nicht freigegeben."
+  }
+
+  if (
+    searchableText.includes("INVALID_CALLBACK_URL") ||
+    searchableText.includes("INVALID_CALLBACKURL") ||
+    searchableText.includes("CALLBACK")
+  ) {
     return "Die Rücksprungadresse für die Anmeldung wurde abgelehnt."
   }
 
-  if (message.includes("403")) {
-    return "Neon Auth hat die Google-Anmeldung abgelehnt. Bitte prüfe die Auth-Konfiguration."
+  if (
+    searchableText.includes("PROVIDER_DISABLED") ||
+    searchableText.includes("PROVIDER_NOT_ENABLED") ||
+    searchableText.includes("SOCIAL_PROVIDER_DISABLED") ||
+    searchableText.includes("OAUTH_PROVIDER_DISABLED") ||
+    (searchableText.includes("PROVIDER") && searchableText.includes("DISABLED"))
+  ) {
+    return "Google ist als Anmeldeanbieter nicht aktiviert."
+  }
+
+  if (
+    details.status === 403 ||
+    details.statusCode === 403 ||
+    searchableText.includes("FORBIDDEN")
+  ) {
+    return "Neon Auth hat die Anmeldung abgelehnt. Bitte Konfiguration prüfen."
+  }
+
+  if (
+    searchableText.includes("GOOGLE") ||
+    searchableText.includes("OAUTH")
+  ) {
+    return "Google-Anmeldung fehlgeschlagen. Bitte Konfiguration prüfen."
   }
 
   return "Die Google-Anmeldung konnte nicht gestartet werden."
+}
+
+function logAuthError(label: string, error: unknown) {
+  const details = getAuthErrorDetails(error)
+
+  console.error(label, {
+    status: details.status,
+    statusCode: details.statusCode,
+    code: details.code,
+    message: details.message,
+    responseBody: details.responseBody,
+    raw: error,
+  })
+}
+
+function getAuthErrorDetails(error: unknown) {
+  if (!isRecord(error)) {
+    return {
+      message: error instanceof Error ? error.message : String(error),
+      raw: String(error),
+    }
+  }
+
+  const response = isRecord(error.response) ? error.response : undefined
+
+  return {
+    status: getNumber(error.status) ?? getNumber(response?.status),
+    statusCode: getNumber(error.statusCode) ?? getNumber(response?.statusCode),
+    code: getString(error.code) ?? getString(error.error),
+    message: getString(error.message) ?? getString(error.statusText),
+    responseBody: getResponseBody(error, response),
+    raw: stringifyForSearch(error),
+  }
+}
+
+function getResponseBody(
+  error: Record<string, unknown>,
+  response?: Record<string, unknown>,
+) {
+  return stringifyForSearch(
+    error.body ??
+      error.data ??
+      error.responseBody ??
+      response?.body ??
+      response?.data,
+  )
+}
+
+function stringifyForSearch(value: unknown): string | undefined {
+  if (value === undefined || value === null) {
+    return undefined
+  }
+
+  if (typeof value === "string") {
+    return value
+  }
+
+  try {
+    return JSON.stringify(value)
+  } catch {
+    return String(value)
+  }
+}
+
+function getString(value: unknown): string | undefined {
+  return typeof value === "string" ? value : undefined
+}
+
+function getNumber(value: unknown): number | undefined {
+  return typeof value === "number" ? value : undefined
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null
 }
 
 function GoogleMark() {
