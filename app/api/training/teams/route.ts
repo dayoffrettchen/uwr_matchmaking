@@ -4,6 +4,10 @@ import { requireOrganizer } from "@/lib/auth/server"
 import { moveSignupToTeam, resetTeams } from "@/lib/teams"
 import { assignBalancedTeams } from "@/lib/matchmaking/balance-teams"
 import { PLAYER_POSITIONS, type PlayerPosition } from "@/lib/ratings/types"
+import { db } from "@/lib/db"
+import { trainings } from "@/lib/db/schema"
+import { desc, eq } from "drizzle-orm"
+import { canPlanTraining, formatTrainingPlanningDeadline } from "@/lib/training/planning"
 
 type TeamActionRequest = {
   action?: "generate" | "clear" | "move"
@@ -20,6 +24,15 @@ export async function POST(request: Request) {
     const body = (await request.json().catch(() => null)) as TeamActionRequest | null
 
     const trainingId = Number.isInteger(body?.trainingId) ? body?.trainingId : undefined
+
+    const [training] = trainingId
+      ? await db.select().from(trainings).where(eq(trainings.id, trainingId)).limit(1)
+      : await db.select().from(trainings).where(eq(trainings.isOpen, true)).orderBy(desc(trainings.scheduledAt)).limit(1)
+
+    if (!training) return NextResponse.json({ error: "Training nicht gefunden" }, { status: 404 })
+    if (!canPlanTraining(training.scheduledAt)) {
+      return NextResponse.json({ error: `Die Einteilung war nur bis ${formatTrainingPlanningDeadline(training.scheduledAt)} möglich.` }, { status: 403 })
+    }
 
     if (body?.action === "generate") {
       await assignBalancedTeams(trainingId)
