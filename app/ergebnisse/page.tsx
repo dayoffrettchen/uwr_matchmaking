@@ -45,6 +45,15 @@ function formatDate(date: Date) {
   })
 }
 
+const TEAM_LABELS: Record<1 | 2, string> = {
+  1: "Team Blau",
+  2: "Team Weiß",
+}
+
+function getTeamLabel(team: number) {
+  return team === 1 || team === 2 ? TEAM_LABELS[team] : `Team ${team}`
+}
+
 function groupPlayers(playersForMatch: MatchPlayerRow[], team: 1 | 2) {
   return playersForMatch.filter((player) => player.team === team)
 }
@@ -215,24 +224,24 @@ export default async function ErgebnissePage() {
                     <span>{match.playerCount} Spieler</span>
                     {match.team1Score !== null && match.team2Score !== null && (
                       <span className="font-semibold text-foreground">
-                        Team 1 {match.team1Score}:{match.team2Score} Team 2
+                        {TEAM_LABELS[1]} {match.team1Score}:{match.team2Score} {TEAM_LABELS[2]}
                       </span>
                     )}
                   </div>
                   <MatchDuties entryPlayer={duties.entryPlayer} checkerPlayer={duties.checkerPlayer} />
                   <div className="grid gap-3 sm:grid-cols-2">
-                    <ResultTeam label="Team 1" players={groupPlayers(playersForMatch, 1)} showRatingDelta={canManage} />
-                    <ResultTeam label="Team 2" players={groupPlayers(playersForMatch, 2)} showRatingDelta={canManage} />
+                    <ResultTeam label={TEAM_LABELS[1]} players={groupPlayers(playersForMatch, 1)} showRatingDelta={canManage} />
+                    <ResultTeam label={TEAM_LABELS[2]} players={groupPlayers(playersForMatch, 2)} showRatingDelta={canManage} />
                   </div>
                   {canManage && !finalized && (
                     <form action={saveMatchScoreAction} className="flex flex-wrap items-end gap-3 rounded-lg border p-3">
                       <input type="hidden" name="matchId" value={match.id} />
                       <label className="grid gap-1 text-sm font-medium">
-                        Team 1
+                        {TEAM_LABELS[1]}
                         <Input name="team1Score" type="number" min="0" required defaultValue={match.team1Score ?? ""} className="w-24" />
                       </label>
                       <label className="grid gap-1 text-sm font-medium">
-                        Team 2
+                        {TEAM_LABELS[2]}
                         <Input name="team2Score" type="number" min="0" required defaultValue={match.team2Score ?? ""} className="w-24" />
                       </label>
                       <Button type="submit" variant="outline">Speichern</Button>
@@ -266,7 +275,7 @@ function MatchDuties({ entryPlayer, checkerPlayer }: { entryPlayer: MatchPlayerR
         <div>
           <p className="text-sm font-semibold">Eintragen</p>
           <p className="text-sm text-muted-foreground">
-            {entryPlayer ? `${entryPlayer.name} aus Team ${entryPlayer.team}` : "Noch kein Spieler zugeteilt"}
+            {entryPlayer ? `${entryPlayer.name} aus ${getTeamLabel(entryPlayer.team)}` : "Noch kein Spieler zugeteilt"}
           </p>
         </div>
       </div>
@@ -275,7 +284,7 @@ function MatchDuties({ entryPlayer, checkerPlayer }: { entryPlayer: MatchPlayerR
         <div>
           <p className="text-sm font-semibold">Kontrollieren</p>
           <p className="text-sm text-muted-foreground">
-            {checkerPlayer ? `${checkerPlayer.name} aus Team ${checkerPlayer.team}` : "Noch kein Gegenspieler zugeteilt"}
+            {checkerPlayer ? `${checkerPlayer.name} aus ${getTeamLabel(checkerPlayer.team)}` : "Noch kein Gegenspieler zugeteilt"}
           </p>
         </div>
       </div>

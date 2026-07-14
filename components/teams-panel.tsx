@@ -27,6 +27,11 @@ type RosterPlayer = {
 type TeamAction = "generate" | "clear"
 type TeamNumber = 1 | 2
 
+const TEAM_LABELS: Record<TeamNumber, string> = {
+  1: "Team Blau",
+  2: "Team Weiß",
+}
+
 export function TeamsPanel({ roster, canManage, trainingId, locale = "de" }: { roster: RosterPlayer[]; canManage: boolean; trainingId?: number; locale?: Locale }) {
   const router = useRouter()
   const t = locale === "de" ? { reset: "Zurücksetzen", resetting: "Setze zurück …", generate: "Teams fair einteilen", generating: "Teile ein …", min: "Mindestens 2 Anmeldungen nötig, um Teams einzuteilen.", none: "Noch keine Teams eingeteilt. Tippe auf „Teams fair einteilen“, um positionsbasiert faire Teams zu bilden.", hint: "Ziehe Spieler per Drag-and-drop auf eine Position, um Team und Position manuell anzupassen. Die Wechselgruppen werden danach automatisch neu berechnet.", actionFailed: "Die Team-Aktion ist fehlgeschlagen. Bitte versuche es erneut.", moveFailed: "Der Spieler konnte nicht verschoben werden. Bitte versuche es erneut." } : { reset: "Reset", resetting: "Resetting …", generate: "Assign fair teams", generating: "Assigning …", min: "At least 2 signups are needed to assign teams.", none: "No teams assigned yet. Tap “Assign fair teams” to create position-based fair teams.", hint: "Drag players onto a position to adjust team and position manually. Rotation groups are recalculated afterwards.", actionFailed: "The team action failed. Please try again.", moveFailed: "The player could not be moved. Please try again." }
@@ -47,7 +52,7 @@ export function TeamsPanel({ roster, canManage, trainingId, locale = "de" }: { r
     setError(null)
 
     try {
-      await postTeamAction({ action, trainingId })
+      await postTeamAction({ action, trainingId }, t.actionFailed)
       startTransition(() => router.refresh())
     } catch (err) {
       setError(err instanceof Error ? err.message : t.actionFailed)
@@ -64,7 +69,7 @@ export function TeamsPanel({ roster, canManage, trainingId, locale = "de" }: { r
     setError(null)
 
     try {
-      await postTeamAction({ action: "move", trainingId, signupId, team, position })
+      await postTeamAction({ action: "move", trainingId, signupId, team, position }, t.moveFailed)
       startTransition(() => router.refresh())
     } catch (err) {
       setError(err instanceof Error ? err.message : t.moveFailed)
@@ -121,7 +126,7 @@ export function TeamsPanel({ roster, canManage, trainingId, locale = "de" }: { r
             {canManage && <p className="mb-3 text-sm text-muted-foreground">{t.hint}</p>}
             <div className="grid min-w-0 gap-4 xl:grid-cols-2">
               <TeamColumn
-                label="Team 1"
+                label={TEAM_LABELS[1]}
                 players={team1}
                 variant="primary"
                 canManage={canManage}
@@ -134,9 +139,9 @@ export function TeamsPanel({ roster, canManage, trainingId, locale = "de" }: { r
                 onPositionDrop={(event, position) => handleDrop(event, 1, position)}
               />
               <TeamColumn
-                label="Team 2"
+                label={TEAM_LABELS[2]}
                 players={team2}
-                variant="accent"
+                variant="white"
                 canManage={canManage}
                 movingSignupId={movingSignupId}
                 dragTarget={dragTarget?.team === 2 ? dragTarget.position : null}
@@ -154,7 +159,7 @@ export function TeamsPanel({ roster, canManage, trainingId, locale = "de" }: { r
   )
 }
 
-async function postTeamAction(body: Record<string, unknown>) {
+async function postTeamAction(body: Record<string, unknown>, fallbackMessage: string) {
   const response = await fetch("/api/training/teams", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -164,7 +169,7 @@ async function postTeamAction(body: Record<string, unknown>) {
 
   if (!response.ok || response.type === "opaqueredirect") {
     const data = await response.json().catch(() => null)
-    throw new Error(typeof data?.error === "string" ? data.error : t.actionFailed)
+    throw new Error(typeof data?.error === "string" ? data.error : fallbackMessage)
   }
 }
 
@@ -183,7 +188,7 @@ function TeamColumn({
 }: {
   label: string
   players: RosterPlayer[]
-  variant: "primary" | "accent"
+  variant: "primary" | "white"
   canManage: boolean
   movingSignupId: number | null
   dragTarget: PlayerPosition | null
@@ -200,7 +205,7 @@ function TeamColumn({
 
   return (
     <div className="min-w-0 overflow-hidden rounded-lg border bg-card transition-colors">
-      <div className={`flex flex-col gap-2 rounded-t-lg px-4 py-3 sm:flex-row sm:items-start sm:justify-between ${variant === "primary" ? "bg-primary text-primary-foreground" : "bg-accent text-accent-foreground"}`}>
+      <div className={`flex flex-col gap-2 rounded-t-lg px-4 py-3 sm:flex-row sm:items-start sm:justify-between ${variant === "primary" ? "bg-primary text-primary-foreground" : "border-b bg-card text-card-foreground"}`}>
         <span className="whitespace-nowrap text-lg font-semibold leading-tight">{label}</span>
         <div className="flex flex-wrap gap-2 sm:justify-end">
           <Badge variant="secondary" className="whitespace-nowrap">{active} im Wasser · {subs} draußen</Badge>
