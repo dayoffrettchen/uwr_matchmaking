@@ -41,8 +41,8 @@ function pairings<T>(items: T[]): Array<[T[], T[]]> {
 }
 
 function buildSingleSlotGroups(members: MatchmakingPlayer[], slots: number, position: PlayerPosition): MatchmakingPlayer[][] {
-  const groups = Array.from({ length: slots }, () => [] as MatchmakingPlayer[])
-  members.forEach((member, index) => groups[index % slots].push(member))
+  const groups = Array.from({ length: Math.min(slots, members.length) }, () => [] as MatchmakingPlayer[])
+  members.forEach((member, index) => groups[index % groups.length].push(member))
   return groups.sort((a, b) => b.length - a.length || b[0].ratings[position] - a[0].ratings[position])
 }
 
