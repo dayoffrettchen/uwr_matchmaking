@@ -170,14 +170,14 @@ export async function rebuildManualLineup(trainingId: number) {
   })
 }
 
-export async function assignBalancedTeams(trainingId?: number): Promise<MatchmakingResult | null> {
+export async function assignBalancedTeams(trainingId?: number, options: Partial<GeneticOptions> = {}): Promise<MatchmakingResult | null> {
   const [training] = trainingId
     ? await db.select().from(trainings).where(eq(trainings.id, trainingId)).limit(1)
     : await db.select().from(trainings).where(eq(trainings.isOpen, true)).limit(1)
   if (!training) return null
   const { signupRows, players: input } = await loadMatchmakingPlayers(training.id)
   const beforeIds = signupRows.map((r) => r.signupId).sort().join(",")
-  const result = balanceMatchmakingPlayers(input)
+  const result = balanceMatchmakingPlayers(input, options)
   await db.transaction(async (tx) => {
     const current = await tx.select({ id: signups.id }).from(signups).where(eq(signups.trainingId, training.id))
     if (current.map((r) => r.id).sort().join(",") !== beforeIds) throw new Error("Die Teilnehmerliste wurde während der Berechnung verändert.")
