@@ -7,6 +7,7 @@ import { revalidatePath } from "next/cache"
 import { db } from "@/lib/db"
 import { signups, trainings } from "@/lib/db/schema"
 import { requireCurrentPlayer } from "@/lib/players/current-player"
+import { signUpPlayer } from "@/lib/signup"
 
 async function requireOpenTraining(trainingId: number) {
   const [training] = await db.select().from(trainings).where(eq(trainings.id, trainingId)).limit(1)
@@ -26,15 +27,17 @@ export async function signUpCurrentPlayer(trainingId: number): Promise<void> {
   const currentPlayer = await requireCurrentPlayer()
   if (!currentPlayer.profileCompleted) redirect("/profil?error=profile-incomplete")
 
-  await requireOpenTraining(trainingId)
+  const training = await requireOpenTraining(trainingId)
 
-  await db.transaction(async (tx) => {
-    await tx
-      .insert(signups)
-      .values({ trainingId, playerId: currentPlayer.id, source: "self-service" })
-      .onConflictDoNothing()
-    await resetCurrentLineup(trainingId, tx)
+  const result = await signUpPlayer({
+    playerId: currentPlayer.id,
+    name: currentPlayer.name,
+    phone: currentPlayer.phone,
+    source: "self-service",
+    trainingId: training.id,
   })
+
+  if (!result.ok) throw new Error("Es gibt gerade kein offenes Training.")
 
   revalidatePath("/")
 }

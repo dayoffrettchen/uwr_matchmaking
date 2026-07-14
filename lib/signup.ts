@@ -26,13 +26,20 @@ export async function signUpPlayer(opts: {
   name: string
   phone?: string | null
   source?: string
+  playerId?: number
+  trainingId?: number
 }) {
-  const training = await getOpenTraining()
+  const training = opts.trainingId
+    ? (await db.select().from(trainings).where(and(eq(trainings.id, opts.trainingId), eq(trainings.isOpen, true))).limit(1))[0]
+    : await getOpenTraining()
   if (!training) return { ok: false as const, reason: "no_open_training" as const }
 
-  // Find existing player by phone, otherwise by name, otherwise create.
+  // Find existing player by explicit id, then by phone, otherwise by name, otherwise create.
   let player = null
-  if (opts.phone) {
+  if (opts.playerId) {
+    ;[player] = await db.select().from(players).where(eq(players.id, opts.playerId)).limit(1)
+  }
+  if (!player && opts.phone) {
     ;[player] = await db.select().from(players).where(eq(players.phone, opts.phone)).limit(1)
   }
   if (!player) {

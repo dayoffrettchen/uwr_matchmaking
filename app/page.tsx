@@ -69,9 +69,6 @@ export default async function Page() {
               <Clock className="size-4" aria-hidden />
               Montag 19:00–20:00 · Freitag 19:00–21:00
             </span>
-            {user.role === "player" && currentPlayer && (
-              <SelfServiceTrainingActions trainingId={training.id} isOpen={training.isOpen} isSignedUp={roster.some((player) => player.playerId === currentPlayer.id)} />
-            )}
             {trainingIsPast && (
               <span className="rounded-full bg-primary-foreground/15 px-2 py-0.5 text-xs font-medium">
                 Vergangenes Training
@@ -88,6 +85,14 @@ export default async function Page() {
             Aktuell ist kein Training zur Anmeldung geöffnet.
           </CardContent>
         </Card>
+      )}
+
+      {training && user.role === "player" && currentPlayer && (
+        <SelfServiceTrainingActions
+          trainingId={training.id}
+          isOpen={training.isOpen}
+          isSignedUp={roster.some((player) => player.playerId === currentPlayer.id)}
+        />
       )}
 
       <div className="grid gap-6 lg:grid-cols-[1fr_1.1fr]">
