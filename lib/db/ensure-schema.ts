@@ -5,12 +5,12 @@ import { pool } from "@/lib/db"
 let schemaReady: Promise<void> | null = null
 
 const SCHEMA_STATEMENTS = [
-
   "ALTER TABLE players ADD COLUMN IF NOT EXISTS auth_user_id text",
   "ALTER TABLE players ADD COLUMN IF NOT EXISTS email text",
   "ALTER TABLE players ADD COLUMN IF NOT EXISTS profile_completed boolean NOT NULL DEFAULT false",
   "ALTER TABLE players ADD COLUMN IF NOT EXISTS notes text",
   "ALTER TABLE players ADD COLUMN IF NOT EXISTS updated_at timestamptz NOT NULL DEFAULT now()",
+  "ALTER TABLE players ADD COLUMN IF NOT EXISTS initial_rating_configured boolean NOT NULL DEFAULT false",
   "CREATE UNIQUE INDEX IF NOT EXISTS players_auth_user_id_unique ON players (auth_user_id)",
   "CREATE UNIQUE INDEX IF NOT EXISTS players_email_unique ON players (email)",
   `CREATE TABLE IF NOT EXISTS player_position_preferences (
@@ -21,7 +21,7 @@ const SCHEMA_STATEMENTS = [
     created_at timestamptz NOT NULL DEFAULT now(),
     updated_at timestamptz NOT NULL DEFAULT now(),
     CONSTRAINT player_position_preferences_player_position_unique UNIQUE (player_id, position)
-  )`,  "ALTER TABLE players ADD COLUMN IF NOT EXISTS initial_rating_configured boolean NOT NULL DEFAULT false",
+  )`,
   `CREATE TABLE IF NOT EXISTS player_position_ratings (
     id serial PRIMARY KEY,
     player_id integer NOT NULL,
@@ -37,6 +37,14 @@ const SCHEMA_STATEMENTS = [
     updated_at timestamptz NOT NULL DEFAULT now(),
     CONSTRAINT player_position_ratings_player_position_unique UNIQUE (player_id, position)
   )`,
+  "ALTER TABLE player_position_ratings ADD COLUMN IF NOT EXISTS initial_rating integer NOT NULL DEFAULT 1000",
+  "ALTER TABLE player_position_ratings ADD COLUMN IF NOT EXISTS games_played integer NOT NULL DEFAULT 0",
+  "ALTER TABLE player_position_ratings ADD COLUMN IF NOT EXISTS wins integer NOT NULL DEFAULT 0",
+  "ALTER TABLE player_position_ratings ADD COLUMN IF NOT EXISTS draws integer NOT NULL DEFAULT 0",
+  "ALTER TABLE player_position_ratings ADD COLUMN IF NOT EXISTS losses integer NOT NULL DEFAULT 0",
+  "ALTER TABLE player_position_ratings ADD COLUMN IF NOT EXISTS is_eligible boolean NOT NULL DEFAULT false",
+  "ALTER TABLE player_position_ratings ADD COLUMN IF NOT EXISTS preference_order integer",
+  "ALTER TABLE player_position_ratings ADD COLUMN IF NOT EXISTS updated_at timestamptz NOT NULL DEFAULT now()",
   `CREATE TABLE IF NOT EXISTS matches (
     id serial PRIMARY KEY,
     training_id integer,
