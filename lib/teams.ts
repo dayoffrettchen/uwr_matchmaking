@@ -43,5 +43,5 @@ export async function resetTeams() {
   const training = await getOpenTraining()
   if (!training) return
 
-  await db.update(signups).set({ team: null }).where(eq(signups.trainingId, training.id))
+  await db.update(signups).set({ team: null, assignedPosition: null, lineupType: null }).where(eq(signups.trainingId, training.id))
 }

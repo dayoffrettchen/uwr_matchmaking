@@ -26,6 +26,8 @@ export async function getDashboardData() {
       name: players.name,
       phone: players.phone,
       team: signups.team,
+      assignedPosition: signups.assignedPosition,
+      lineupType: signups.lineupType,
       source: signups.source,
       createdAt: signups.createdAt,
     })

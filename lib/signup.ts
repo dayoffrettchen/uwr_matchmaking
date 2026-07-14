@@ -1,5 +1,6 @@
 import { db } from "@/lib/db"
 import { messages, players, signups, trainings } from "@/lib/db/schema"
+import { initializePlayerRatings } from "@/lib/players/initialize-ratings"
 import { and, desc, eq } from "drizzle-orm"
 
 // Phrases that count as "I'm coming" / present.
@@ -44,6 +45,7 @@ export async function signUpPlayer(opts: {
       .insert(players)
       .values({ name: opts.name, phone: opts.phone ?? null })
       .returning()
+    await initializePlayerRatings(player.id)
   } else if (opts.phone && !player.phone) {
     await db.update(players).set({ phone: opts.phone }).where(eq(players.id, player.id))
   }
