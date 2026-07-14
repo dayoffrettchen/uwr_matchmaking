@@ -117,7 +117,7 @@ export function TeamsPanel({ roster, canManage, trainingId }: { roster: RosterPl
         ) : (
           <>
             {canManage && <p className="mb-3 text-sm text-muted-foreground">Ziehe Spieler per Drag-and-drop in das andere Team, um die Einteilung manuell anzupassen. Danach sollte die faire Einteilung neu berechnet werden.</p>}
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid min-w-0 gap-4 xl:grid-cols-2">
               <TeamColumn
                 label="Team 1"
                 players={team1}
@@ -197,10 +197,10 @@ function TeamColumn({
   const averageRating = ratedPlayers.length > 0 ? Math.round(ratedPlayers.reduce((sum, player) => sum + player.assignedRating!, 0) / ratedPlayers.length) : null
 
   return (
-    <div className={`rounded-lg border bg-card transition-colors ${isDropTarget ? "border-primary bg-primary/5" : ""}`} onDragOver={onDragOver} onDragLeave={onDragLeave} onDrop={onDrop}>
-      <div className={`flex items-center justify-between rounded-t-lg px-4 py-2 ${variant === "primary" ? "bg-primary text-primary-foreground" : "bg-accent text-accent-foreground"}`}>
-        <span className="font-semibold">{label}</span>
-        <div className="flex flex-wrap justify-end gap-2">
+    <div className={`min-w-0 overflow-hidden rounded-lg border bg-card transition-colors ${isDropTarget ? "border-primary bg-primary/5" : ""}`} onDragOver={onDragOver} onDragLeave={onDragLeave} onDrop={onDrop}>
+      <div className={`flex flex-col gap-2 rounded-t-lg px-4 py-3 sm:flex-row sm:items-start sm:justify-between ${variant === "primary" ? "bg-primary text-primary-foreground" : "bg-accent text-accent-foreground"}`}>
+        <span className="text-lg font-semibold leading-tight">{label}</span>
+        <div className="flex flex-wrap gap-2 sm:justify-end">
           <Badge variant="secondary">{active} im Wasser · {subs} draußen</Badge>
           {averageRating !== null && <Badge variant="secondary">Ø MMR {averageRating}</Badge>}
         </div>
@@ -236,20 +236,20 @@ function RotationGroupCard({ groupId, members, canManage, movingSignupId, onDrag
   const waiting = members.filter((member) => !(member.startsInWater ?? member.lineupType !== "substitute"))
 
   return (
-    <div className="rounded-md border px-3 py-2 text-sm">
-      <div className="flex items-center justify-between gap-2">
-        <span className="font-medium">{label} {groupId}</span>
-        <Badge variant="secondary">Start: {starters.map((p) => p.name).join(" + ") || "—"}</Badge>
+    <div className="min-w-0 rounded-md border px-3 py-2 text-sm">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+        <span className="min-w-0 break-words font-medium">{label} {groupId}</span>
+        <Badge variant="secondary" className="max-w-full whitespace-normal text-left sm:shrink-0">Start: {starters.map((p) => p.name).join(" + ") || "—"}</Badge>
       </div>
       {waiting.length > 0 && <p className="mt-1 text-muted-foreground">Draußen: {waiting.map((p) => p.name).join(" + ")}</p>}
       <ol className="mt-2 grid gap-1">
         {members.map((p) => (
-          <li key={p.signupId} className={`flex items-center justify-between gap-3 ${movingSignupId === p.signupId ? "opacity-60" : ""}`} draggable={canManage} onDragStart={(event) => { event.dataTransfer.effectAllowed = "move"; event.dataTransfer.setData("text/plain", String(p.signupId)); onDragStart(p.signupId) }} onDragEnd={onDragEnd}>
-            <span className="flex items-center gap-2">
+          <li key={p.signupId} className={`flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between ${movingSignupId === p.signupId ? "opacity-60" : ""}`} draggable={canManage} onDragStart={(event) => { event.dataTransfer.effectAllowed = "move"; event.dataTransfer.setData("text/plain", String(p.signupId)); onDragStart(p.signupId) }} onDragEnd={onDragEnd}>
+            <span className="flex min-w-0 items-center gap-2 break-words">
               {canManage && <GripVertical className="size-4 shrink-0 text-muted-foreground" aria-hidden />}
-              {p.rotationOrder ?? "–"}. {p.name}
+              <span className="min-w-0">{p.rotationOrder ?? "–"}. {p.name}</span>
             </span>
-            <span className="flex flex-wrap justify-end gap-2">
+            <span className="flex flex-wrap gap-2 sm:justify-end">
               {p.startsInWater ?? p.lineupType !== "substitute" ? <Badge variant="outline">im Wasser</Badge> : <Badge variant="secondary">draußen</Badge>}
               {canManage && typeof p.assignedRating === "number" && <Badge variant="outline">MMR {p.assignedRating}</Badge>}
             </span>
