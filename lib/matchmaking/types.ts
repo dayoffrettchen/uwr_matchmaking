@@ -1,5 +1,7 @@
 import type { LineupType, PlayerPosition, TeamNumber } from "@/lib/ratings/types"
 
+export type RotationGroupType = "single" | "pair" | "triple"
+
 export type MatchmakingPlayer = {
   signupId: number
   playerId: number
@@ -11,7 +13,49 @@ export type MatchmakingPlayer = {
   confidence: Record<PlayerPosition, number>
 }
 
-export type MatchmakingAssignment = { signupId: number; playerId: number; team: TeamNumber; position: PlayerPosition; lineupType: LineupType }
-export type TeamSummary = { activeCount: number; substituteCount: number; averageParticipantRating: number; rotationBonus: number; effectiveStrength: number; positionAverages: Record<PlayerPosition, number>; confidence: number }
+export type MatchmakingAssignment = {
+  signupId: number
+  playerId: number
+  team: TeamNumber
+  position: PlayerPosition
+  rotationGroupId: number
+  rotationGroupType: RotationGroupType
+  rotationOrder: number
+  startsInWater: boolean
+  lineupType: LineupType
+}
+
+export type RotationGroupMember = {
+  signupId: number
+  playerId: number
+  name: string
+  rating: number
+  rotationOrder: number
+  startsInWater: boolean
+}
+
+export type RotationGroup = {
+  id: number
+  team: TeamNumber
+  position: PlayerPosition
+  type: RotationGroupType
+  activeSlotCount: 1 | 2
+  members: RotationGroupMember[]
+  averageMemberRating: number
+  effectiveRating: number
+  ratingSpread: number
+  activePairRatings?: number[]
+}
+
+export type TeamSummary = {
+  activeCount: number
+  substituteCount: number
+  averageParticipantRating: number
+  rotationBonus: number
+  effectiveStrength: number
+  startingLineupStrength: number
+  positionAverages: Record<PlayerPosition, number>
+  confidence: number
+}
 export type MatchmakingQuality = "high" | "medium" | "low"
-export type MatchmakingResult = { assignments: MatchmakingAssignment[]; team1: TeamSummary; team2: TeamSummary; warnings: string[]; computationTimeMs: number; candidatesEvaluated: number; optimality: "exact" | "best-found"; quality: MatchmakingQuality }
+export type MatchmakingResult = { assignments: MatchmakingAssignment[]; rotationGroups: RotationGroup[]; team1: TeamSummary; team2: TeamSummary; warnings: string[]; computationTimeMs: number; candidatesEvaluated: number; optimality: "exact" | "best-found"; quality: MatchmakingQuality }
