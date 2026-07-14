@@ -1,6 +1,7 @@
 import "server-only"
 
-import { createHash } from "crypto"
+import { createHash, createHmac, timingSafeEqual } from "crypto"
+import { cookies } from "next/headers"
 import { createNeonAuth } from "@neondatabase/auth/next/server"
 
 /**
@@ -51,6 +52,18 @@ function organizerEmails(): string[] {
 
 export type AppRole = "organizer" | "player"
 
+const NEON_AUTH_SESSION_DATA_COOKIE_NAME = "__Secure-neon-auth.local.session_data"
+
+type NeonSessionCookiePayload = {
+  exp?: number
+  user?: {
+    id?: unknown
+    name?: unknown
+    email?: unknown
+    image?: unknown
+  } | null
+}
+
 export type SessionUser = {
   id: string
   name: string | null
@@ -59,37 +72,106 @@ export type SessionUser = {
   role: AppRole
 }
 
+function base64UrlToBuffer(value: string): Buffer {
+  return Buffer.from(value.replace(/-/g, "+").replace(/_/g, "/"), "base64")
+}
+
+function verifySessionDataCookie(value: string): NeonSessionCookiePayload | null {
+  const [encodedHeader, encodedPayload, encodedSignature] = value.split(".")
+
+  if (!encodedHeader || !encodedPayload || !encodedSignature) {
+    return null
+  }
+
+  const signedValue = `${encodedHeader}.${encodedPayload}`
+  const expectedSignature = createHmac("sha256", cookieSecret()).update(signedValue).digest()
+  const actualSignature = base64UrlToBuffer(encodedSignature)
+
+  if (
+    expectedSignature.length !== actualSignature.length ||
+    !timingSafeEqual(expectedSignature, actualSignature)
+  ) {
+    return null
+  }
+
+  const payload = JSON.parse(base64UrlToBuffer(encodedPayload).toString("utf8")) as NeonSessionCookiePayload
+
+  if (payload.exp && payload.exp * 1000 <= Date.now()) {
+    return null
+  }
+
+  return payload
+}
+
+async function getSessionDataCookieUser(): Promise<NeonSessionCookiePayload["user"] | null> {
+  const cookieStore = await cookies()
+  const sessionDataCookie = cookieStore.get(NEON_AUTH_SESSION_DATA_COOKIE_NAME)?.value
+
+  if (!sessionDataCookie) {
+    return null
+  }
+
+  try {
+    return verifySessionDataCookie(sessionDataCookie)?.user ?? null
+  } catch {
+    return null
+  }
+}
+
+function toSessionUser(sessionUser: NonNullable<NeonSessionCookiePayload["user"]>): SessionUser | null {
+  if (typeof sessionUser.id !== "string") {
+    return null
+  }
+
+  const email = typeof sessionUser.email === "string" ? sessionUser.email : null
+  const role: AppRole =
+    email && organizerEmails().includes(email.toLowerCase())
+      ? "organizer"
+      : "player"
+
+  return {
+    id: sessionUser.id,
+    name: typeof sessionUser.name === "string" ? sessionUser.name : null,
+    email,
+    image: typeof sessionUser.image === "string" ? sessionUser.image : null,
+    role,
+  }
+}
+
+type GetSessionUserOptions = {
+  /**
+   * Neon Auth may refresh its local session-data cookie when `auth.getSession()`
+   * misses the cache. Cookie writes are only allowed in Server Actions and Route
+   * Handlers, so Server Components use the signed local cache only.
+   */
+  allowCookieMutation?: boolean
+}
+
 /**
  * Reads the current Neon Auth session and resolves the application role.
  */
-export async function getSessionUser(): Promise<SessionUser | null> {
+export async function getSessionUser(options: GetSessionUserOptions = {}): Promise<SessionUser | null> {
+  const cachedUser = await getSessionDataCookieUser()
+  const resolvedCachedUser = cachedUser ? toSessionUser(cachedUser) : null
+
+  if (resolvedCachedUser || !options.allowCookieMutation) {
+    return resolvedCachedUser
+  }
+
   const { data: session } = await auth.getSession()
 
   if (!session?.user) {
     return null
   }
 
-  const email = (session.user.email ?? "").toLowerCase()
-
-  const role: AppRole =
-    email && organizerEmails().includes(email)
-      ? "organizer"
-      : "player"
-
-  return {
-    id: session.user.id,
-    name: session.user.name ?? null,
-    email: session.user.email ?? null,
-    image: session.user.image ?? null,
-    role,
-  }
+  return toSessionUser(session.user)
 }
 
 /**
  * Requires an authenticated organizer.
  */
 export async function requireOrganizer(): Promise<SessionUser> {
-  const user = await getSessionUser()
+  const user = await getSessionUser({ allowCookieMutation: true })
 
   if (!user) {
     throw new Error("Nicht angemeldet")
@@ -107,7 +189,7 @@ export async function requireOrganizer(): Promise<SessionUser> {
  * Requires any authenticated Google user.
  */
 export async function requireAuthenticatedUser(): Promise<SessionUser> {
-  const user = await getSessionUser()
+  const user = await getSessionUser({ allowCookieMutation: true })
 
   if (!user) {
     throw new Error("Nicht angemeldet")
