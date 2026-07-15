@@ -1,80 +1,54 @@
-# UWR Matchmaking — Project Rules
+# UWR Matchmaking — Repository Contract
 
-Project rules for v0. Follow these conventions for every change in this repo.
+## Project purpose
 
-## What this app is
+This application manages underwater-rugby training signup, team assignment, rotations, matches, and player ratings for a UWR club.
 
-A web app for an **Unterwasserrugby (UWR / underwater rugby)** club. Players sign
-up for the next training by writing "bin da" (or similar) in WhatsApp, and an
-organizer randomly splits everyone into two teams. The UI language is **German**.
+## Authoritative matchmaking rule
 
-## Stack
+- A complete active team has six players.
+- Whenever feasible, the active lineup consists of:
+  - two goalkeepers,
+  - two defenders,
+  - two forwards.
+- Each of those six active places is an independent rotation slot.
+- Each populated rotation slot has exactly one starter.
+- Additional players assigned to a position are substitutes in one of its two slots.
+- Every signup appears exactly once.
+- Players may only be assigned eligible positions.
+- Team sizes differ by at most one.
+- Identical normalized input and seed must produce deterministic results.
+- The optimizer must score the same final lineup structure that is displayed and persisted.
+- Hard invariants must not be silently weakened.
 
-- **Next.js 16** (App Router) + React 19, TypeScript.
-- **Neon Postgres** accessed through **Drizzle ORM** (`drizzle-orm/node-postgres` + `pg` Pool).
-- **Neon Auth** (managed Better Auth) with **Google OAuth** in shared mode.
-- **Tailwind CSS v4** + shadcn/ui components.
-- Icons: `lucide-react`. Never use emojis as icons.
+## Repository rules
 
-## Auth & roles
+- Do not run or add production schema mutation during ordinary requests.
+- Database schema changes require versioned migrations.
+- Do not commit secrets, credentials, exported personal data, or real environment files.
+- Keep server-only code out of client bundles.
+- Prefer pure functions for matchmaking and rating calculations.
+- Avoid broad `any`, unsafe casts, and ignored errors.
+- Do not modify unrelated files in focused pull requests.
+- Preserve German and English behavior unless the task explicitly changes localization.
+- Do not update dependencies unrelated to the task.
 
-- Auth is **managed Neon Auth**, configured in `lib/auth/server.ts`. Google OAuth is
-  enabled in the Neon dashboard (shared mode) — **do not** add Google client
-  credentials or any other provider unless explicitly asked.
-- The client lives in `lib/auth/client.ts` and needs an **absolute** base URL
-  (built from `window.location.origin`), not a relative path.
-- Roles are **not** stored in the DB. They are derived from the `ORGANIZER_EMAILS`
-  env var (comma-separated allowlist). Anyone whose email is on it is an
-  `organizer`; every other signed-in user is a `viewer`.
-- Always read the session via `getSessionUser()` from `lib/auth/server.ts`.
-- Guard every **mutating** server action with `requireOrganizer()`. Viewers get
-  read-only UI — hide organizer controls behind a `canManage` prop.
+## Required validation commands
 
-## Middleware
+Run these before opening or updating a pull request:
 
-- `middleware.ts` protects all routes and **must run on the Node.js runtime**
-  (`runtime: "nodejs"`) because the auth module uses Node's `crypto`.
-- The matcher must keep `api/auth`, `api/whatsapp`, and `sign-in` public.
-  **Never** put the WhatsApp webhook behind auth — Meta calls it unauthenticated.
+1. `pnpm install --frozen-lockfile`
+2. `pnpm typecheck`
+3. `pnpm lint`
+4. `pnpm test`
+5. `pnpm build`
+6. `pnpm check`
 
-## Database
+`pnpm test:coverage` is required when test infrastructure or coverage behavior changes.
 
-- Schema is in `lib/db/schema.ts`; the Drizzle client is `db` from `lib/db`.
-- Tables: `trainings`, `players`, `signups`, `messages`. Column names are snake_case
-  in SQL, camelCase in Drizzle.
-- Apply DDL/schema changes through the **Neon MCP** (one statement per call) before
-  writing code that depends on them. Drizzle Kit migrations are not used here.
-- App tables have no foreign keys by design — don't add them unless asked.
-- Never use an ORM other than Drizzle, and never use `@neondatabase/serverless`
-  or `@vercel/postgres` to reach Neon.
+## Local environment assumptions
 
-## Signup logic
-
-- Shared logic lives in `lib/signup.ts` (`signUpPlayer`, `isPresentMessage`,
-  `getOpenTraining`, `logMessage`). Both the WhatsApp webhook and the in-app
-  forms must go through `signUpPlayer` — don't duplicate signup logic.
-- "Present" phrases are matched by `PRESENT_PATTERNS` (e.g. "bin da", "dabei",
-  "komme", "+1"). Extend that array rather than scattering new checks.
-
-## Environment variables
-
-Required (all already set in this project):
-
-- `DATABASE_URL` — Neon connection string (auto-provisioned).
-- `NEON_AUTH_BASE_URL` — managed Neon Auth server URL.
-- `NEON_AUTH_COOKIE_SECRET` — cookie signing secret. `lib/auth/server.ts` hashes
-  short values to 64 hex chars, so any value works, but prefer a 32+ char random one.
-- `ORGANIZER_EMAILS` — comma-separated organizer email allowlist.
-
-WhatsApp Cloud API (optional, only needed for real WhatsApp group integration):
-`WHATSAPP_VERIFY_TOKEN`, `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`.
-
-## Conventions
-
-- UI copy is **German**.
-- Build components, not one giant file. The dashboard composes `roster-panel`,
-  `teams-panel`, `message-feed`, and `user-menu`.
-- Use semantic Tailwind design tokens (`bg-background`, `text-foreground`, etc.),
-  never hard-coded colors. The theme is an aquatic teal palette in `app/globals.css`.
-- Data fetching happens in Server Components / server actions — do not fetch in
-  `useEffect`.
+- Use the package manager identified by the committed `pnpm-lock.yaml`: pnpm.
+- Use a current Node.js version compatible with Next.js 16 and Vitest; CI uses Node.js 24.
+- Production builds may import modules that read environment variables. Local builds should provide harmless development values for `DATABASE_URL`, `NEON_AUTH_BASE_URL`, `NEON_AUTH_COOKIE_SECRET`, and `ORGANIZER_EMAILS` when the surrounding environment does not already provide them.
+- Never use real production credentials for local validation or CI.
