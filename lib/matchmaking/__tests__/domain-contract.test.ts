@@ -1,9 +1,10 @@
 import { describe, expect, it } from "vitest"
 import { PLAYER_POSITIONS } from "@/lib/ratings/types"
 import { balanceMatchmakingPlayers, buildRotationSteps } from "../balance-teams"
-import { getTargetLineup } from "../target-lineup"
-import { evaluateCandidate } from "../fitness"
+import { getFeasibleLineupTarget, getNominalLineupTarget, getTargetLineup, isLineupTargetDistinctlyMatchable, targetTotal } from "../target-lineup"
+import { calculateTargetLineupPenalty, evaluateCandidate } from "../fitness"
 import {
+  player,
   TEST_OPTIONS,
   expectAtMostSixStartersPerTeam,
   expectBalancedTeamSizes,
@@ -24,6 +25,47 @@ function assertCoreInvariants(players: ReturnType<typeof rosters.six>, result: R
   expectBalancedTeamSizes(result)
   expectAtMostSixStartersPerTeam(result)
 }
+
+
+describe("matchmaking domain contract: target feasibility", () => {
+  for (const value of [0, 1, 3, 5]) it(`caps nominal target total for ${value} active players per team`, () => {
+    expect(targetTotal(getNominalLineupTarget(value))).toBeLessThanOrEqual(value)
+  })
+
+  it("returns full nominal target at six and still caps larger values", () => {
+    expect(getNominalLineupTarget(6)).toEqual({ goalkeeper: 2, defender: 2, forward: 2 })
+    expect(targetTotal(getNominalLineupTarget(30))).toBe(6)
+  })
+
+  it("uses distinct-player matching for full, odd, missing, single-position, and overlapping rosters", () => {
+    expect(getFeasibleLineupTarget(rosters.twelveFeasible(), 6)).toEqual({ goalkeeper: 2, defender: 2, forward: 2 })
+    expect(targetTotal(getFeasibleLineupTarget(rosters.allFlexible11(), 5))).toBeLessThanOrEqual(5)
+    for (const fixture of [rosters.missingGoalkeeper(), rosters.missingDefender(), rosters.missingForward(), rosters.singlePosition(), rosters.odd()]) {
+      const target = getFeasibleLineupTarget(fixture, Math.min(6, Math.floor(fixture.length / 2)))
+      expect(isLineupTargetDistinctlyMatchable(fixture, target)).toBe(true)
+    }
+    const overlap = rosters.overlapGoalkeeperDefender()
+    const target = getFeasibleLineupTarget(overlap, 6)
+    expect(targetTotal(target)).toBeLessThanOrEqual(6)
+    expect(isLineupTargetDistinctlyMatchable(overlap, { goalkeeper: 2, defender: 2, forward: 2 })).toBe(false)
+    expect(isLineupTargetDistinctlyMatchable(overlap, target)).toBe(true)
+    expect(getFeasibleLineupTarget(overlap, 6)).toEqual(target)
+  })
+})
+
+describe("matchmaking domain contract: target penalty", () => {
+  function assignment(id: number, team: 1 | 2, position: (typeof PLAYER_POSITIONS)[number], startsInWater = true) {
+    return { signupId: id, playerId: id, team, position, rotationGroupId: id, rotationGroupType: "single" as const, rotationOrder: 1, startsInWater, lineupType: startsInWater ? "active" as const : "substitute" as const }
+  }
+
+  it("penalizes missing partially feasible targets and accepts satisfied zero/one/two targets", () => {
+    expect(calculateTargetLineupPenalty([], { goalkeeper: 1, defender: 0, forward: 0 })).toBeGreaterThan(0)
+    expect(calculateTargetLineupPenalty([assignment(1, 1, "goalkeeper"), assignment(2, 2, "goalkeeper")], { goalkeeper: 1, defender: 0, forward: 0 })).toBe(0)
+    expect(calculateTargetLineupPenalty([assignment(1, 1, "defender"), assignment(2, 2, "defender")], { goalkeeper: 0, defender: 2, forward: 0 })).toBeGreaterThan(0)
+    expect(calculateTargetLineupPenalty([], { goalkeeper: 0, defender: 0, forward: 0 })).toBe(0)
+    expect(calculateTargetLineupPenalty([1,2].flatMap((team) => PLAYER_POSITIONS.flatMap((position) => [assignment(team * 10 + position.length, team as 1 | 2, position), assignment(team * 20 + position.length, team as 1 | 2, position)])), { goalkeeper: 2, defender: 2, forward: 2 })).toBe(0)
+  })
+})
 
 describe("matchmaking domain contract: current characterization", () => {
   it("documents that the target-lineup helper returns the authoritative 2/2/2 target", () => {
@@ -168,7 +210,8 @@ describe("matchmaking domain contract: final 2/2/2 slot model", () => {
 
   it.todo("lib/matchmaking/balance-teams must expose machine-readable violations such as MISSING_POSITION_SLOT, NO_ELIGIBLE_POSITION, UNBALANCED_TEAM_SIZE, ACTIVE_PLAYER_LIMIT_EXCEEDED, and INCOMPLETE_ROTATION_SLOT")
 
-  it("components/teams-panel and app/api/training/teams/route consume the final one-starter slot model scored by the optimizer", () => {
+  // TODO: team persistence and TeamsPanel rendering consume the final slot model.
+  it("the optimizer returns the same final one-starter slot model that fitness evaluates", () => {
     const players = rosters.fourteenFeasible()
     const result = balanceMatchmakingPlayers(players, TEST_OPTIONS)
     const evaluated = evaluateCandidate(players, result.assignments.map((assignment) => ({ signupId: assignment.signupId, team: assignment.team, position: assignment.position })))!
@@ -178,9 +221,38 @@ describe("matchmaking domain contract: final 2/2/2 slot model", () => {
     expectExactlyOneStarterPerPopulatedSlot(result)
   })
 
+  it("does not duplicate warning strings for infeasible rosters", () => {
+    const result = balanceMatchmakingPlayers(rosters.missingGoalkeeper(), TEST_OPTIONS)
+    expect(new Set(result.warnings).size).toBe(result.warnings.length)
+  })
+
   it("lib/matchmaking/genetic produces deterministic semantic results for equal-rating and randomized rosters with the same normalized input and seed", () => {
     expectDeterministicSemanticResult(balanceMatchmakingPlayers(rosters.equalRating(), TEST_OPTIONS), balanceMatchmakingPlayers([...rosters.equalRating()].reverse(), TEST_OPTIONS))
     const seeded = seededRoster(30, 909)
     expectDeterministicSemanticResult(balanceMatchmakingPlayers(seeded, { ...TEST_OPTIONS, seed: 909, maxCandidates: 240 }), balanceMatchmakingPlayers([...seeded].reverse(), { ...TEST_OPTIONS, seed: 909, maxCandidates: 240 }))
+  })
+})
+
+
+describe("matchmaking domain contract: final group semantics", () => {
+  it("materializes one-, two-, and three-member final slots with per-substitute effective rating", () => {
+    const players = [
+      ...Array.from({ length: 5 }, (_, index) => player({ id: index + 1, eligible: ["goalkeeper"], rating: 1000 })),
+      player({ id: 100, eligible: ["forward"], rating: 1000 }),
+    ]
+    const assignments = [
+      ...players.slice(0, 5).map((p) => ({ signupId: p.signupId, playerId: p.playerId, team: 1 as const, position: "goalkeeper" as const, rotationGroupId: 0, rotationGroupType: "single" as const, rotationOrder: 0, startsInWater: false, lineupType: "substitute" as const })),
+      { signupId: 100, playerId: 100, team: 2 as const, position: "forward" as const, rotationGroupId: 0, rotationGroupType: "single" as const, rotationOrder: 0, startsInWater: false, lineupType: "substitute" as const },
+    ]
+    const { finalizeUnderwaterRugbyLineup } = require("../balance-teams") as typeof import("../balance-teams")
+    const result = finalizeUnderwaterRugbyLineup(players, assignments, [])
+    for (const size of [1, 2, 3]) {
+      const group = result.rotationGroups.find((candidate) => candidate.members.length === size)!
+      expect(group.type).toBe(size === 1 ? "single" : size === 2 ? "pair" : "position")
+      expect(group.members.filter((member) => member.startsInWater)).toHaveLength(1)
+      expect(group.activeSlotCount).toBe(1)
+      expect(group.effectiveRating).toBe(group.averageMemberRating + (size - 1) * 30)
+      expectValidClosedRotationCycle(group)
+    }
   })
 })

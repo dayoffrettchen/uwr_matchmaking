@@ -31,6 +31,12 @@ export const rosters = {
   missingForward: () => Array.from({ length: 12 }, (_, index) => player({ id: index + 1, eligible: index % 2 === 0 ? ["goalkeeper"] : ["defender"] })),
   odd: () => Array.from({ length: 13 }, (_, index) => player({ id: index + 1 })),
   equalRating: () => Array.from({ length: 12 }, (_, index) => player({ id: index + 1, rating: 1000 })),
+  allFlexible11: () => Array.from({ length: 11 }, (_, index) => player({ id: index + 1 })),
+  overlapGoalkeeperDefender: () => [
+    ...Array.from({ length: 4 }, (_, index) => player({ id: index + 1, eligible: ["goalkeeper", "defender"] })),
+    ...Array.from({ length: 8 }, (_, index) => player({ id: index + 5, eligible: ["forward"] })),
+  ],
+  singlePosition: () => Array.from({ length: 12 }, (_, index) => player({ id: index + 1, eligible: ["goalkeeper"] })),
 }
 
 function rotatePositions(offset: number): PlayerPosition[] {
