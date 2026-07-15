@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation"
 import { cookies } from "next/headers"
-import { SlidersHorizontal } from "lucide-react"
+import { Database, SlidersHorizontal } from "lucide-react"
 import { AppNavigation } from "@/components/app-navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input"
 import { getSessionUser } from "@/lib/auth/server"
 import { getLocale } from "@/lib/i18n-server"
 import { MATCHMAKING_SETTING_FIELDS, MATCHMAKING_SETTINGS_COOKIE, parseMatchmakingSettingsCookie } from "@/lib/matchmaking/settings"
-import { saveMatchmakingSettings } from "./actions"
+import { importTestData, saveMatchmakingSettings } from "./actions"
 
 export const dynamic = "force-dynamic"
 
@@ -60,6 +60,28 @@ export default async function EinstellungenPage() {
               <Button type="submit" disabled={!canManage}>Einstellungen speichern</Button>
               <Button type="reset" variant="outline" disabled={!canManage}>Änderungen verwerfen</Button>
             </div>
+          </form>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Database className="size-5 text-primary" aria-hidden />
+            Testdaten importieren
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-sm text-muted-foreground text-pretty">
+            Importiert zehn realistische Beispielspieler mit Telefonnummern, Positionswünschen, Ratings, WhatsApp-Nachrichten und acht Anmeldungen für das aktuell offene Training. Der Import ist wiederholbar: vorhandene Testspieler werden aktualisiert, Duplikate werden vermieden.
+          </p>
+          {!canManage && (
+            <p className="rounded-lg border border-muted bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
+              Nur Organisatoren können Testdaten importieren.
+            </p>
+          )}
+          <form action={importTestData}>
+            <Button type="submit" disabled={!canManage}>Testdaten importieren</Button>
           </form>
         </CardContent>
       </Card>
