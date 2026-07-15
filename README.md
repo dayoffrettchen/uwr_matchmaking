@@ -68,6 +68,7 @@ pnpm dev
 ## Validation commands
 
 ```sh
+pnpm install --frozen-lockfile
 pnpm typecheck
 pnpm lint
 pnpm test
