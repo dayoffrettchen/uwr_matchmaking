@@ -235,28 +235,27 @@ function PositionGroups({ position, players, canManage, movingSignupId, isDropTa
       <h3 className="text-sm font-semibold text-muted-foreground">{POSITION_LABELS[position]}</h3>
       <div className="mt-1 grid gap-2">
         {players.length === 0 && <div className="rounded-md border px-3 py-2 text-sm text-muted-foreground">Leer</div>}
-        {Array.from(grouped.entries()).map(([groupId, members]) => (
-          <RotationGroupCard key={groupId} groupId={groupId} members={members.sort((a, b) => (a.rotationOrder ?? 0) - (b.rotationOrder ?? 0))} canManage={canManage} movingSignupId={movingSignupId} onDragStart={onDragStart} onDragEnd={onDragEnd} />
+        {Array.from(grouped.entries()).map(([groupId, members], index) => (
+          <RotationGroupCard key={groupId} label={`${POSITION_LABELS[position]} – Platz ${index + 1}`} members={members.sort((a, b) => (a.rotationOrder ?? 0) - (b.rotationOrder ?? 0))} canManage={canManage} movingSignupId={movingSignupId} onDragStart={onDragStart} onDragEnd={onDragEnd} />
         ))}
       </div>
     </section>
   )
 }
 
-function RotationGroupCard({ groupId, members, canManage, movingSignupId, onDragStart, onDragEnd }: { groupId: number; members: RosterPlayer[]; canManage: boolean; movingSignupId: number | null; onDragStart: (signupId: number) => void; onDragEnd: () => void }) {
-  const type = members[0]?.rotationGroupType ?? "single"
+function RotationGroupCard({ label, members, canManage, movingSignupId, onDragStart, onDragEnd }: { label: string; members: RosterPlayer[]; canManage: boolean; movingSignupId: number | null; onDragStart: (signupId: number) => void; onDragEnd: () => void }) {
   const starters = members.filter((member) => member.startsInWater ?? member.lineupType !== "substitute")
   const waiting = members.filter((member) => !(member.startsInWater ?? member.lineupType !== "substitute"))
-  const activeSlotCount = Math.max(1, starters.length)
-  const label = members.length < 2 ? "Unterbesetzt" : members.length === activeSlotCount ? "Doppelbesetzung" : "Positionswechselgruppe"
-  const rotationSteps = members.length > activeSlotCount
-    ? members.map((player, index) => ({ incoming: members[(index + activeSlotCount) % members.length], outgoing: player }))
-    : []
+  const rotationText = members.length === 2
+    ? `Wechsel: ${members.map((p) => p.name).join(" ↔ ")}`
+    : members.length > 2
+      ? `Rotation: ${[...members, members[0]].map((p) => p.name).join(" → ")}`
+      : null
 
   return (
     <div className="min-w-0 rounded-md border px-3 py-2 text-sm">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-        <span className="min-w-0 break-words font-medium">{label} {groupId}</span>
+        <span className="min-w-0 break-words font-medium">{label}</span>
         <Badge variant="secondary" className="max-w-full whitespace-normal text-left sm:shrink-0">Start: {starters.map((p) => p.name).join(" + ") || "—"}</Badge>
       </div>
       {waiting.length > 0 && <p className="mt-1 text-muted-foreground">Draußen: {waiting.map((p) => p.name).join(" + ")}</p>}
@@ -274,8 +273,7 @@ function RotationGroupCard({ groupId, members, canManage, movingSignupId, onDrag
           </li>
         ))}
       </ol>
-      {type === "pair" && rotationSteps.length === 0 && <p className="mt-2 text-muted-foreground">Wechsel: {members.map((p) => p.name).join(" ↔ ")}</p>}
-      {rotationSteps.length > 0 && <p className="mt-2 text-muted-foreground">Rotation: {rotationSteps.map(({ incoming, outgoing }) => `${incoming.name} rein → ${outgoing.name} raus`).join(" · ")}</p>}
+      {rotationText ? <p className="mt-2 text-muted-foreground">{rotationText}</p> : <p className="mt-2 text-muted-foreground">Kein Wechselspieler</p>}
     </div>
   )
 }

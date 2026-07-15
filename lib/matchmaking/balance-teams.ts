@@ -45,11 +45,31 @@ export function buildRotationSteps(members: RotationGroupMember[], activeSlotCou
 }
 
 function makeFinalLineupGroup(id: number, team: 1 | 2, position: PlayerPosition, members: MatchmakingPlayer[]): RotationGroup {
-  const activeSlotCount = Math.min(2, members.length) as 1 | 2
-  const startIndexes = new Set(Array.from({ length: activeSlotCount }, (_, index) => index))
-  const type: RotationGroup["type"] = members.length === 1 ? "single" : members.length === 2 ? "pair" : "position"
-  const group = makeGroup(id, team, position, members, type, startIndexes)
-  return { ...group, rotationSteps: buildRotationSteps(group.members, activeSlotCount) }
+  const type: RotationGroup["type"] = members.length === 1 ? "single" : "pair"
+  const group = makeGroup(id, team, position, members, type, new Set([0]))
+  return { ...group, rotationSteps: buildRotationSteps(group.members, 1) }
+}
+
+export function buildPositionSlotGroups(members: MatchmakingPlayer[], position: PlayerPosition): MatchmakingPlayer[][] {
+  if (members.length <= 2) return members.map((member) => [member])
+
+  const slots: [MatchmakingPlayer[], MatchmakingPlayer[]] = [[members[0]], [members[1]]]
+  for (const member of members.slice(2)) {
+    const [slot1, slot2] = slots
+    const slot1Rating = average(slot1.map((player) => player.ratings[position]))
+    const slot2Rating = average(slot2.map((player) => player.ratings[position]))
+    const slot1SizeAfter = slot1.length + 1
+    const slot2SizeAfter = slot2.length + 1
+    const sizeDiff1 = Math.abs(slot1SizeAfter - slot2.length)
+    const sizeDiff2 = Math.abs(slot1.length - slot2SizeAfter)
+    const ratingDiff1 = Math.abs(average([...slot1.map((player) => player.ratings[position]), member.ratings[position]]) - slot2Rating)
+    const ratingDiff2 = Math.abs(slot1Rating - average([...slot2.map((player) => player.ratings[position]), member.ratings[position]]))
+
+    if (sizeDiff1 < sizeDiff2 || (sizeDiff1 === sizeDiff2 && ratingDiff1 < ratingDiff2)) slot1.push(member)
+    else slot2.push(member)
+  }
+
+  return slots
 }
 
 export function finalizeUnderwaterRugbyLineup(players: MatchmakingPlayer[], assignments: MatchmakingAssignment[], warnings: string[]): { assignments: MatchmakingAssignment[]; rotationGroups: RotationGroup[]; team1: TeamSummary; team2: TeamSummary } {
@@ -57,16 +77,22 @@ export function finalizeUnderwaterRugbyLineup(players: MatchmakingPlayer[], assi
   const rotationGroups: RotationGroup[] = []
   let nextGroupId = 1
   for (const team of [1, 2] as const) for (const position of PLAYER_POSITIONS) {
-    const members = assignments
-      .filter((a) => a.team === team && a.position === position)
+    const positionAssignments = assignments.filter((a) => a.team === team && a.position === position)
+    const hasRotationOrder = positionAssignments.some((a) => a.rotationOrder > 0)
+    const orderBySignup = new Map(positionAssignments.map((a) => [a.signupId, a.rotationOrder]))
+    const members = positionAssignments
       .map((a) => bySignup.get(a.signupId)!)
-      .sort((a, b) => b.ratings[position] - a.ratings[position] || a.signupId - b.signupId)
+      .sort((a, b) => hasRotationOrder
+        ? (orderBySignup.get(a.signupId) ?? 0) - (orderBySignup.get(b.signupId) ?? 0) || b.ratings[position] - a.ratings[position] || a.signupId - b.signupId
+        : b.ratings[position] - a.ratings[position] || a.signupId - b.signupId)
     if (members.length === 0) {
       warnings.push(`Team ${team}: Keine Spieler für ${position} zugeordnet. Die finale Aufstellung ist dort unterbesetzt.`)
       continue
     }
     if (members.length < 2) warnings.push(`Team ${team}: Nur ${members.length} Spieler für ${position} zugeordnet. Es starten nur vorhandene Spieler im Wasser.`)
-    rotationGroups.push(makeFinalLineupGroup(nextGroupId++, team, position, members))
+    for (const slotMembers of buildPositionSlotGroups(members, position)) {
+      rotationGroups.push(makeFinalLineupGroup(nextGroupId++, team, position, slotMembers))
+    }
   }
   const finalizedAssignments = assignments.map((assignment) => {
     const group = rotationGroups.find((candidate) => candidate.team === assignment.team && candidate.position === assignment.position && candidate.members.some((member) => member.signupId === assignment.signupId))
