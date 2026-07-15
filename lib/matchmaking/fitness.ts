@@ -1,6 +1,7 @@
 import { getRatingStatus } from "@/lib/ratings/confidence"
 import { PLAYER_POSITIONS, type PlayerPosition } from "@/lib/ratings/types"
-import { MAX_ACTIVE_PLAYERS_PER_TEAM, OBJECTIVE_WEIGHTS } from "./constants"
+import { OBJECTIVE_WEIGHTS } from "./constants"
+import { ACTIVE_SLOTS_PER_POSITION, MAX_ACTIVE_PLAYERS_PER_TEAM } from "./rules"
 import { completeAssignments, summarize } from "./balance-teams"
 import { getTargetLineup } from "./target-lineup"
 import { toDraftAssignments, type Candidate } from "./candidate"
@@ -75,7 +76,16 @@ export function evaluateCandidate(players: MatchmakingPlayer[], candidate: Candi
   const startingLineupDifference = Math.abs(team1.startingLineupStrength - team2.startingLineupStrength)
   const positionDiffs = Object.fromEntries(PLAYER_POSITIONS.map((p) => [p, Math.abs(positionEffective(rotationGroups.filter((g) => g.team === 1), p) - positionEffective(rotationGroups.filter((g) => g.team === 2), p))])) as Record<PlayerPosition, number>
   const positionStrengthDifference = PLAYER_POSITIONS.reduce((sum, p) => sum + positionDiffs[p], 0)
-  const targetLineupPenalty = PLAYER_POSITIONS.reduce((sum, p) => sum + Math.abs(assignments.filter((a) => a.team === 1 && a.startsInWater && a.position === p).length - assignments.filter((a) => a.team === 2 && a.startsInWater && a.position === p).length), 0)
+  const availability = Object.fromEntries(PLAYER_POSITIONS.map((p) => [p, players.filter((player) => player.eligiblePositions.includes(p)).length])) as Record<PlayerPosition, number>
+  const target = getTargetLineup(MAX_ACTIVE_PLAYERS_PER_TEAM, availability)
+  const targetLineupPenalty = PLAYER_POSITIONS.reduce((sum, p) => {
+    const team1Active = assignments.filter((a) => a.team === 1 && a.startsInWater && a.position === p).length
+    const team2Active = assignments.filter((a) => a.team === 2 && a.startsInWater && a.position === p).length
+    const completeSlotPenalty = target[p] === ACTIVE_SLOTS_PER_POSITION[p]
+      ? Math.abs(team1Active - target[p]) + Math.abs(team2Active - target[p])
+      : 0
+    return sum + Math.abs(team1Active - team2Active) + completeSlotPenalty
+  }, 0)
   const activePlayerDifference = Math.abs(team1.activeCount - team2.activeCount)
   const substituteAdvantagePenalty = Math.max(0, Math.abs(team1.substituteCount - team2.substituteCount) - (players.length % 2))
   const rotationSpreadPenalty = rotationSpread(rotationGroups)
@@ -84,8 +94,6 @@ export function evaluateCandidate(players: MatchmakingPlayer[], candidate: Candi
     const b = rotationGroups.filter((g) => g.team === 2 && g.position === p).reduce((s, g) => s + g.effectiveRating * g.activeSlotCount, 0)
     return sum + Math.abs(a - b)
   }, 0)
-  const availability = Object.fromEntries(PLAYER_POSITIONS.map((p) => [p, players.filter((player) => player.eligiblePositions.includes(p)).length])) as Record<PlayerPosition, number>
-  const target = getTargetLineup(MAX_ACTIVE_PLAYERS_PER_TEAM, availability)
   const positionCrowdingPenalty = PLAYER_POSITIONS.reduce((sum, p) => {
     const team1PositionCount = assignments.filter((a) => a.team === 1 && a.position === p).length
     const team2PositionCount = assignments.filter((a) => a.team === 2 && a.position === p).length
