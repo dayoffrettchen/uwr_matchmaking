@@ -26,12 +26,12 @@ The optimizer must score the same final slot structure that is returned by the d
 
 ## Current implementation notes
 
-The current target-lineup helper prefers a legacy 1 goalkeeper, 2 defenders, and 3 forwards model. Candidate fitness is calculated in `lib/matchmaking/fitness.ts` by completing draft assignments through the intermediate rotation-group model. `lib/matchmaking/balance-teams.ts` later finalizes the result into the displayed and persisted slot model. Existing tests now keep that behavior as characterization while TODO tests define the future 2/2/2 acceptance criteria.
+The target-lineup helper now prefers the authoritative 2 goalkeeper, 2 defender, and 2 forward model whenever feasible. Candidate fitness is calculated in `lib/matchmaking/fitness.ts` from the same final independent one-starter slot model produced by `lib/matchmaking/balance-teams.ts`, so the optimizer scores the lineup structure returned to the application.
 
 ## What this PR tests now
 
 The contract tests add reusable deterministic roster fixtures and assertions for currently enforceable invariants: every signup is assigned exactly once, team sizes differ by at most one, assigned positions are eligible, active players do not exceed six per team, populated final slots have exactly one starter, rotation cycles are deterministic, input order is normalized, candidate limits are respected, and missing-position rosters remain best-effort without illegal assignments.
 
-## TODO tests for the next PR
+## Remaining follow-up tests
 
-The TODO tests are expected to become active in `Unify matchmaking evaluation and output around final 2-2-2 slots`. That implementation PR should enable the 2/2/2 target-lineup contract, independent one-starter candidate evaluation, complete feasible twelve-player and fourteen-player slot behavior, deterministic thirty-player final slots, structured violation codes, and display/persistence alignment with the final slot model.
+The unified final-slot implementation enables the 2/2/2 target-lineup contract, independent one-starter candidate evaluation, complete feasible twelve-player and fourteen-player slot behavior, deterministic thirty-player final slots, and display/persistence alignment with the final slot model. Structured machine-readable violation codes remain a follow-up task.

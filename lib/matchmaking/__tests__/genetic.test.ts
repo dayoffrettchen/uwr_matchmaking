@@ -37,11 +37,9 @@ const fairnessFixture = () => [
 ]
 
 describe("genetisches Matchmaking", () => {
-  it("charakterisiert die aktuelle Legacy-Zielaufstellung als 1 Torwart, 2 Verteidiger und 3 Stürmer", () => {
-    expect(getTargetLineup(6)).toEqual({ goalkeeper: 1, defender: 2, forward: 3 })
+  it("verwendet die beabsichtigte 2/2/2-Zielaufstellung", () => {
+    expect(getTargetLineup(6)).toEqual({ goalkeeper: 2, defender: 2, forward: 2 })
   })
-
-  it.todo("lib/matchmaking/target-lineup soll in der Refactor-PR die beabsichtigte 2/2/2-Zielaufstellung liefern")
 
   it("erfüllt Teamgrößen, Vollständigkeit und Positionsberechtigungen", () => {
     const result = balanceMatchmakingPlayers(fairnessFixture(), { seed: 7, maxCandidates: 300, maxGenerations: 12, maxComputationTimeMs: 0, populationSize: 24 })

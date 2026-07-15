@@ -1,7 +1,7 @@
 export const MAX_COMPUTATION_TIME_MS = 250
 export const MAX_CANDIDATES = 10_000
 
-export const MAX_ACTIVE_PLAYERS_PER_TEAM = 6
+export { MAX_ACTIVE_PLAYERS_PER_TEAM } from "./rules"
 
 export const MAX_ACTIVE_PLAYERS_VIOLATION = 1_000_000
 export const MISSING_ACTIVE_SLOT_PENALTY = 1_000_000

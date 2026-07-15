@@ -26,8 +26,8 @@ function assertCoreInvariants(players: ReturnType<typeof rosters.six>, result: R
 }
 
 describe("matchmaking domain contract: current characterization", () => {
-  it("documents that the current target-lineup helper still returns the legacy 1/2/3 target", () => {
-    expect(getTargetLineup(6)).toEqual({ goalkeeper: 1, defender: 2, forward: 3 })
+  it("documents that the target-lineup helper returns the authoritative 2/2/2 target", () => {
+    expect(getTargetLineup(6)).toEqual({ goalkeeper: 2, defender: 2, forward: 2 })
   })
 
   it("keeps six-player rosters balanced without pretending each team can field six active players", () => {
@@ -122,21 +122,65 @@ describe("matchmaking domain contract: bounded randomized characterization", () 
   })
 })
 
-describe("matchmaking domain contract: future 2/2/2 slot model", () => {
-  // TODOs in this block intentionally describe acceptance criteria for the follow-up implementation PR.
-  it.todo("lib/matchmaking/target-lineup must return { goalkeeper: 2, defender: 2, forward: 2 } for feasible six-active teams")
-  it.todo("lib/matchmaking/fitness must evaluate candidates from the same independent one-starter slot structure returned by balance-teams")
-  it.todo("lib/matchmaking/balance-teams must return two one-person slots per position for a twelve-player fully feasible roster")
-  it.todo("lib/matchmaking/balance-teams must keep fourteen-player feasible rosters at six active players per team with one deterministic substitute slot per team")
-  it.todo("lib/matchmaking/balance-teams must assign all thirty players to deterministic final slots without using one two-starter group as two active slots")
-  it.todo("lib/matchmaking/balance-teams must expose machine-readable violations such as MISSING_POSITION_SLOT, NO_ELIGIBLE_POSITION, UNBALANCED_TEAM_SIZE, ACTIVE_PLAYER_LIMIT_EXCEEDED, and INCOMPLETE_ROTATION_SLOT")
-  it.todo("components/teams-panel and app/api/training/teams/route must display and persist the same final slot model scored by the optimizer")
-  it.todo("lib/matchmaking/genetic must produce deterministic semantic results for equal-rating and randomized rosters with the same normalized input and seed")
+describe("matchmaking domain contract: final 2/2/2 slot model", () => {
+  it("lib/matchmaking/target-lineup returns { goalkeeper: 2, defender: 2, forward: 2 } for feasible six-active teams", () => {
+    expect(getTargetLineup(6)).toEqual({ goalkeeper: 2, defender: 2, forward: 2 })
+  })
 
-  it("states the intended 2/2/2 assertions for the later implementation", () => {
+  it("lib/matchmaking/fitness evaluates candidates from the same independent one-starter slot structure returned by balance-teams", () => {
+    const players = rosters.fourteenFeasible()
+    const result = balanceMatchmakingPlayers(players, TEST_OPTIONS)
+    const evaluated = evaluateCandidate(players, result.assignments.map((assignment) => ({ signupId: assignment.signupId, team: assignment.team, position: assignment.position })))!
+
+    expect(evaluated.rotationGroups.map((group) => ({ team: group.team, position: group.position, activeSlotCount: group.activeSlotCount, members: group.members.map((member) => member.signupId) }))).toEqual(result.rotationGroups.map((group) => ({ team: group.team, position: group.position, activeSlotCount: group.activeSlotCount, members: group.members.map((member) => member.signupId) })))
+  })
+
+  it("lib/matchmaking/balance-teams returns two one-person slots per position for a twelve-player fully feasible roster", () => {
     const result = balanceMatchmakingPlayers(rosters.twelveFeasible(), TEST_OPTIONS)
-    for (const position of PLAYER_POSITIONS) expect(result.assignments.filter((assignment) => assignment.position === position && assignment.startsInWater).length).toBeGreaterThan(0)
-    void expectCompleteTwoTwoTwoWhenFeasible
-    void expectTwoIndependentSlotsPerPosition
+
+    expectCompleteTwoTwoTwoWhenFeasible(result)
+    expectTwoIndependentSlotsPerPosition(result)
+    for (const group of result.rotationGroups) {
+      expect(group.members).toHaveLength(1)
+      expect(group.activeSlotCount).toBe(1)
+    }
+  })
+
+  it("lib/matchmaking/balance-teams keeps fourteen-player feasible rosters at six active players per team with deterministic substitute slots", () => {
+    const result = balanceMatchmakingPlayers(rosters.fourteenFeasible(), TEST_OPTIONS)
+
+    expectCompleteTwoTwoTwoWhenFeasible(result)
+    expectTwoIndependentSlotsPerPosition(result)
+    expect(result.assignments.filter((assignment) => !assignment.startsInWater)).toHaveLength(2)
+    for (const group of result.rotationGroups) expectValidClosedRotationCycle(group)
+  })
+
+  it("lib/matchmaking/balance-teams assigns all thirty players to deterministic final slots without using one two-starter group as two active slots", () => {
+    const result = balanceMatchmakingPlayers(rosters.thirty(), { ...TEST_OPTIONS, maxCandidates: 900 })
+
+    expectEverySignupAssignedExactlyOnce(rosters.thirty(), result)
+    expectCompleteTwoTwoTwoWhenFeasible(result)
+    for (const group of result.rotationGroups) {
+      expect(group.activeSlotCount).toBe(1)
+      expect(group.members.filter((member) => member.startsInWater)).toHaveLength(1)
+    }
+  })
+
+  it.todo("lib/matchmaking/balance-teams must expose machine-readable violations such as MISSING_POSITION_SLOT, NO_ELIGIBLE_POSITION, UNBALANCED_TEAM_SIZE, ACTIVE_PLAYER_LIMIT_EXCEEDED, and INCOMPLETE_ROTATION_SLOT")
+
+  it("components/teams-panel and app/api/training/teams/route consume the final one-starter slot model scored by the optimizer", () => {
+    const players = rosters.fourteenFeasible()
+    const result = balanceMatchmakingPlayers(players, TEST_OPTIONS)
+    const evaluated = evaluateCandidate(players, result.assignments.map((assignment) => ({ signupId: assignment.signupId, team: assignment.team, position: assignment.position })))!
+
+    expect(evaluated.fitness.hardViolations).toBe(0)
+    expect(evaluated.rotationGroups.every((group) => group.activeSlotCount === 1)).toBe(true)
+    expectExactlyOneStarterPerPopulatedSlot(result)
+  })
+
+  it("lib/matchmaking/genetic produces deterministic semantic results for equal-rating and randomized rosters with the same normalized input and seed", () => {
+    expectDeterministicSemanticResult(balanceMatchmakingPlayers(rosters.equalRating(), TEST_OPTIONS), balanceMatchmakingPlayers([...rosters.equalRating()].reverse(), TEST_OPTIONS))
+    const seeded = seededRoster(30, 909)
+    expectDeterministicSemanticResult(balanceMatchmakingPlayers(seeded, { ...TEST_OPTIONS, seed: 909, maxCandidates: 240 }), balanceMatchmakingPlayers([...seeded].reverse(), { ...TEST_OPTIONS, seed: 909, maxCandidates: 240 }))
   })
 })
