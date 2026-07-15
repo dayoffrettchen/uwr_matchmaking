@@ -98,7 +98,7 @@ export function finalizeUnderwaterRugbyLineup(players: MatchmakingPlayer[], assi
     const group = rotationGroups.find((candidate) => candidate.team === assignment.team && candidate.position === assignment.position && candidate.members.some((member) => member.signupId === assignment.signupId))
     const member = group?.members.find((candidate) => candidate.signupId === assignment.signupId)
     if (!group || !member) throw new Error("Für eine Anmeldung konnte keine finale Wechselgruppe erstellt werden.")
-    return { ...assignment, rotationGroupId: group.id, rotationGroupType: group.type, rotationOrder: member.rotationOrder, startsInWater: member.startsInWater, lineupType: member.startsInWater ? "active" : "substitute" }
+    return { ...assignment, rotationGroupId: group.id, rotationGroupType: group.type, rotationOrder: member.rotationOrder, startsInWater: member.startsInWater, lineupType: member.startsInWater ? "active" as const : "substitute" as const }
   })
   return { assignments: finalizedAssignments, rotationGroups, team1: summarize(bySignup, finalizedAssignments, rotationGroups, 1), team2: summarize(bySignup, finalizedAssignments, rotationGroups, 2) }
 }
@@ -159,7 +159,7 @@ export function completeAssignments(players: MatchmakingPlayer[], drafts: DraftA
     const group = rotationGroups.find((candidate) => candidate.members.some((member) => member.signupId === draft.signupId))
     const member = group?.members.find((candidate) => candidate.signupId === draft.signupId)
     if (!group || !member) throw new Error("Für eine Anmeldung konnte keine Wechselgruppe erstellt werden.")
-    return { ...draft, rotationGroupId: group.id, rotationGroupType: group.type, rotationOrder: member.rotationOrder, startsInWater: member.startsInWater, lineupType: member.startsInWater ? "active" : "substitute" }
+    return { ...draft, rotationGroupId: group.id, rotationGroupType: group.type, rotationOrder: member.rotationOrder, startsInWater: member.startsInWater, lineupType: member.startsInWater ? "active" as const : "substitute" as const }
   })
   return { assignments, rotationGroups }
 }
