@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache"
 import { cookies } from "next/headers"
 import { requireOrganizer } from "@/lib/auth/server"
 import { MATCHMAKING_SETTINGS_COOKIE, normalizeMatchmakingSettings } from "@/lib/matchmaking/settings"
+import { importSampleTrainingData } from "@/lib/test-data"
 
 export async function saveMatchmakingSettings(formData: FormData) {
   await requireOrganizer()
@@ -23,5 +24,15 @@ export async function saveMatchmakingSettings(formData: FormData) {
   })
 
   revalidatePath("/")
+  revalidatePath("/einstellungen")
+}
+
+export async function importTestData() {
+  await requireOrganizer()
+  await importSampleTrainingData()
+
+  revalidatePath("/")
+  revalidatePath("/spieler")
+  revalidatePath("/ranking")
   revalidatePath("/einstellungen")
 }
