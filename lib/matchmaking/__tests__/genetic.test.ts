@@ -143,4 +143,14 @@ describe("genetisches Matchmaking", () => {
     expect(result.assignments.some((assignment) => assignment.team === 1)).toBe(true)
     expect(result.assignments.some((assignment) => assignment.team === 2)).toBe(true)
   })
+
+  it("bricht ab, wenn kaum eindeutige Kandidaten erzeugt werden können", () => {
+    const players = Array.from({ length: 6 }, (_, index) => player(index + 1, `F${index + 1}`, { forward: 1000 }, ["forward"]))
+
+    const result = balanceMatchmakingPlayers(players, { seed: 5, maxCandidates: 500, maxGenerations: 20, maxComputationTimeMs: 0, populationSize: 48 })
+
+    expect(result.assignments).toHaveLength(players.length)
+    expect(result.candidatesEvaluated).toBeLessThan(500)
+    expect(result.assignments.every((assignment) => assignment.position === "forward")).toBe(true)
+  })
 })

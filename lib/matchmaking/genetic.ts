@@ -47,25 +47,58 @@ export function runGeneticOptimization(input: MatchmakingPlayer[], options: Gene
   pushEval(population, fromDraftAssignments(players, buildGreedySeed(players, { reverseTeamPriority: true })))
   pushEval(population, snake(players))
   for (const pos of PLAYER_POSITIONS) pushEval(population, byPosition(players, pos))
-  while (population.length < options.populationSize && evaluated < options.maxCandidates) pushEval(population, randomCandidate(players, prng))
+  fillPopulation(population, options.populationSize, () => randomCandidate(players, prng), pushEval, () => evaluated, options.maxCandidates, started, options.maxComputationTimeMs)
   for (let i = 0; i < Math.min(12, options.populationSize); i++) pushEval(population, mutate(players, greedy.candidate, prng, best))
 
   for (let gen = 0; gen < options.maxGenerations && evaluated < options.maxCandidates; gen++) {
     population.sort((a, b) => compareBreakdowns(a.fitness, b.fitness, a.hash, b.hash))
     const next = [greedy, best, ...population.slice(0, 4)].filter((v, i, a) => a.findIndex((x) => x.hash === v.hash) === i)
-    while (next.length < options.populationSize && evaluated < options.maxCandidates) {
-      const a = tournament(population, prng), b = tournament(population, prng)
-      let child = crossover(a.candidate, b.candidate, prng)
-      if (prng.chance(0.85)) child = mutate(players, child, prng, best)
-      pushEval(next, child)
-      if (Date.now() - started > options.maxComputationTimeMs && options.maxComputationTimeMs > 0) break
-    }
+    fillPopulation(
+      next,
+      options.populationSize,
+      () => {
+        const a = tournament(population, prng), b = tournament(population, prng)
+        let child = crossover(a.candidate, b.candidate, prng)
+        if (prng.chance(0.85)) child = mutate(players, child, prng, best)
+        return child
+      },
+      pushEval,
+      () => evaluated,
+      options.maxCandidates,
+      started,
+      options.maxComputationTimeMs,
+    )
     population = next
   }
   best = localImprove(players, best, evalOne)
   if (compareBreakdowns(best.fitness, greedy.fitness, best.hash, greedy.hash) > 0) best = greedy
   warnings.push(...best.warnings)
   return { assignments: best.assignments, rotationGroups: best.rotationGroups, team1: best.team1, team2: best.team2, warnings: [], computationTimeMs: Date.now() - started, candidatesEvaluated: evaluated, optimality: "best-found", quality: "medium" }
+}
+
+function fillPopulation(
+  population: EvaluatedCandidate[],
+  targetSize: number,
+  createCandidate: () => Candidate,
+  pushEval: (arr: EvaluatedCandidate[], c: Candidate) => void,
+  getEvaluated: () => number,
+  maxCandidates: number,
+  started: number,
+  maxComputationTimeMs: number,
+) {
+  let attemptsWithoutGrowth = 0
+  const maxAttemptsWithoutGrowth = Math.max(targetSize * 20, 100)
+
+  while (population.length < targetSize && getEvaluated() < maxCandidates && attemptsWithoutGrowth < maxAttemptsWithoutGrowth) {
+    if (maxComputationTimeMs > 0 && Date.now() - started > maxComputationTimeMs) break
+
+    const beforeLength = population.length
+    const beforeEvaluated = getEvaluated()
+    pushEval(population, createCandidate())
+
+    if (population.length === beforeLength && getEvaluated() === beforeEvaluated) attemptsWithoutGrowth++
+    else attemptsWithoutGrowth = 0
+  }
 }
 
 function snake(players: MatchmakingPlayer[]): Candidate {
