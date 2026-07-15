@@ -1,7 +1,7 @@
 import { PLAYER_POSITIONS, type PlayerPosition, type TeamNumber } from "@/lib/ratings/types"
-import { MAX_ACTIVE_PLAYERS_PER_TEAM } from "./constants"
+import { getActivePlayersPerTeamLimit } from "./rules"
 import { canonicalizePlayers, type DraftAssignment } from "./candidate"
-import { getTargetLineup } from "./target-lineup"
+import { getFeasibleLineupTarget } from "./target-lineup"
 import type { MatchmakingPlayer } from "./types"
 
 export function getPreferenceOrder(player: MatchmakingPlayer, position: PlayerPosition): number {
@@ -12,8 +12,7 @@ export function getPreferenceOrder(player: MatchmakingPlayer, position: PlayerPo
 }
 
 export function buildGreedySeed(players: MatchmakingPlayer[], options?: { reverseTeamPriority?: boolean }): DraftAssignment[] {
-  const availability = Object.fromEntries(PLAYER_POSITIONS.map((pos) => [pos, players.filter((p) => p.eligiblePositions.includes(pos)).length])) as Record<PlayerPosition, number>
-  const target = getTargetLineup(MAX_ACTIVE_PLAYERS_PER_TEAM, availability)
+  const target = getFeasibleLineupTarget(players, getActivePlayersPerTeamLimit(players.length))
   const ordered = canonicalizePlayers(players).sort((a, b) => a.eligiblePositions.length - b.eligiblePositions.length || a.signupId - b.signupId)
   const drafts: DraftAssignment[] = []
   const positionCounts = { 1: { goalkeeper: 0, defender: 0, forward: 0 }, 2: { goalkeeper: 0, defender: 0, forward: 0 } } as Record<TeamNumber, Record<PlayerPosition, number>>

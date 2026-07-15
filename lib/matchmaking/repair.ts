@@ -1,6 +1,6 @@
 import { PLAYER_POSITIONS, type PlayerPosition, type TeamNumber } from "@/lib/ratings/types"
-import { getTargetLineup } from "./target-lineup"
-import { MAX_ACTIVE_PLAYERS_PER_TEAM } from "./constants"
+import { getFeasibleLineupTarget } from "./target-lineup"
+import { getActivePlayersPerTeamLimit } from "./rules"
 import { type Candidate } from "./candidate"
 import { getPositionPenalty } from "./fitness"
 import type { MatchmakingPlayer } from "./types"
@@ -17,8 +17,7 @@ export function repairCandidate(players: MatchmakingPlayer[], candidate: Candida
   while (repaired.filter((g) => g.team === 1).length < minTeam1) moveBest(players, repaired, 2, 1)
   while (repaired.filter((g) => g.team === 1).length > maxTeam1) moveBest(players, repaired, 1, 2)
 
-  const availability = Object.fromEntries(PLAYER_POSITIONS.map((pos) => [pos, players.filter((p) => p.eligiblePositions.includes(pos)).length])) as Record<PlayerPosition, number>
-  const target = getTargetLineup(MAX_ACTIVE_PLAYERS_PER_TEAM, availability)
+  const target = getFeasibleLineupTarget(players, getActivePlayersPerTeamLimit(players.length))
   const playerById = new Map(players.map((p) => [p.signupId, p]))
   for (const team of [1, 2] as const) for (const pos of PLAYER_POSITIONS) {
     const feasible = Math.min(target[pos], players.filter((p) => p.eligiblePositions.includes(pos)).length)
