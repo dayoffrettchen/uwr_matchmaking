@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache"
 import { cookies } from "next/headers"
 import { requireOrganizer } from "@/lib/auth/server"
 import { MATCHMAKING_SETTINGS_COOKIE, normalizeMatchmakingSettings } from "@/lib/matchmaking/settings"
+import { DELETE_CONFIRMATION, clearAppData, importAppData } from "@/lib/data-transfer"
 import { importSampleTrainingData } from "@/lib/test-data"
 
 export async function saveMatchmakingSettings(formData: FormData) {
@@ -34,5 +35,39 @@ export async function importTestData() {
   revalidatePath("/")
   revalidatePath("/spieler")
   revalidatePath("/ranking")
+  revalidatePath("/einstellungen")
+}
+
+
+export async function importJsonData(formData: FormData) {
+  await requireOrganizer()
+  const file = formData.get("jsonFile")
+  if (!(file instanceof File) || file.size === 0) {
+    throw new Error("Bitte wähle eine JSON-Datei aus.")
+  }
+
+  await importAppData(await file.text())
+
+  revalidatePath("/")
+  revalidatePath("/spieler")
+  revalidatePath("/ranking")
+  revalidatePath("/spiele")
+  revalidatePath("/ergebnisse")
+  revalidatePath("/einstellungen")
+}
+
+export async function deleteAllData(formData: FormData) {
+  await requireOrganizer()
+  if (formData.get("confirmation") !== DELETE_CONFIRMATION) {
+    throw new Error(`Bitte bestätige das Löschen mit „${DELETE_CONFIRMATION}“.`)
+  }
+
+  await clearAppData()
+
+  revalidatePath("/")
+  revalidatePath("/spieler")
+  revalidatePath("/ranking")
+  revalidatePath("/spiele")
+  revalidatePath("/ergebnisse")
   revalidatePath("/einstellungen")
 }

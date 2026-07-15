@@ -2,13 +2,14 @@ import { redirect } from "next/navigation"
 import { cookies } from "next/headers"
 import { Database, SlidersHorizontal } from "lucide-react"
 import { AppNavigation } from "@/components/app-navigation"
-import { Button } from "@/components/ui/button"
+import { Button, buttonVariants } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { getSessionUser } from "@/lib/auth/server"
 import { getLocale } from "@/lib/i18n-server"
 import { MATCHMAKING_SETTING_FIELDS, MATCHMAKING_SETTINGS_COOKIE, parseMatchmakingSettingsCookie } from "@/lib/matchmaking/settings"
-import { importTestData, saveMatchmakingSettings } from "./actions"
+import { DELETE_CONFIRMATION } from "@/lib/data-transfer"
+import { deleteAllData, importJsonData, importTestData, saveMatchmakingSettings } from "./actions"
 
 export const dynamic = "force-dynamic"
 
@@ -83,6 +84,63 @@ export default async function EinstellungenPage() {
           <form action={importTestData}>
             <Button type="submit" disabled={!canManage}>Testdaten importieren</Button>
           </form>
+        </CardContent>
+      </Card>
+
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Database className="size-5 text-primary" aria-hidden />
+            Daten sichern, wiederherstellen und löschen
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="grid gap-6">
+          <section className="space-y-3">
+            <h2 className="font-semibold text-foreground">JSON exportieren</h2>
+            <p className="text-sm text-muted-foreground text-pretty">
+              Lade alle App-Daten als JSON-Datei herunter: Trainings, Spieler, Positionswünsche, Ratings, Spiele, Anmeldungen und Nachrichten.
+            </p>
+            {canManage ? (
+              <a className={buttonVariants()} href="/api/data/export">Daten als JSON exportieren</a>
+            ) : (
+              <Button type="button" disabled>Daten als JSON exportieren</Button>
+            )}
+          </section>
+
+          <section className="space-y-3 rounded-lg border bg-card p-4">
+            <h2 className="font-semibold text-foreground">JSON importieren</h2>
+            <p className="text-sm text-muted-foreground text-pretty">
+              Importiert einen zuvor exportierten Stand. Dabei werden die aktuellen App-Daten ersetzt, damit IDs und Zuordnungen exakt zum Export passen.
+            </p>
+            <form action={importJsonData} className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
+              <label className="grid gap-2 text-sm font-medium text-foreground">
+                JSON-Datei
+                <Input name="jsonFile" type="file" accept="application/json,.json" disabled={!canManage} required />
+              </label>
+              <Button type="submit" disabled={!canManage}>JSON importieren</Button>
+            </form>
+          </section>
+
+          <section className="space-y-3 rounded-lg border border-destructive/30 bg-destructive/5 p-4">
+            <h2 className="font-semibold text-destructive">Alle App-Daten löschen</h2>
+            <p className="text-sm text-muted-foreground text-pretty">
+              Löscht Trainings, Spieler, Ratings, Spiele, Anmeldungen und Nachrichten unwiderruflich. Zum Schutz muss die Bestätigung exakt schriftlich eingegeben werden: <span className="font-mono text-foreground">{DELETE_CONFIRMATION}</span>
+            </p>
+            <form action={deleteAllData} className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
+              <label className="grid gap-2 text-sm font-medium text-foreground">
+                Schriftliche Bestätigung
+                <Input name="confirmation" placeholder={DELETE_CONFIRMATION} disabled={!canManage} required />
+              </label>
+              <Button type="submit" variant="destructive" disabled={!canManage}>Alle Daten löschen</Button>
+            </form>
+          </section>
+
+          {!canManage && (
+            <p className="rounded-lg border border-muted bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
+              Nur Organisatoren können Daten exportieren, importieren oder löschen.
+            </p>
+          )}
         </CardContent>
       </Card>
 
