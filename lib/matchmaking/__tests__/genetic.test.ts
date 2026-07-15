@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import { PLAYER_POSITIONS, type PlayerPosition } from "@/lib/ratings/types"
-import { balanceMatchmakingPlayers, buildRotationSteps, finalizeUnderwaterRugbyLineup } from "../balance-teams"
+import { balanceMatchmakingPlayers, buildPositionSlotGroups, buildRotationSteps, finalizeUnderwaterRugbyLineup } from "../balance-teams"
 import { fromDraftAssignments } from "../candidate"
 import { OBJECTIVE_WEIGHTS } from "../constants"
 import { evaluateCandidate, getPositionPenalty } from "../fitness"
@@ -72,28 +72,32 @@ describe("genetisches Matchmaking", () => {
 
     for (const position of PLAYER_POSITIONS) {
       const positioned = result.assignments.filter((a) => a.team === 1 && a.position === position)
+      const groupIds = new Set(positioned.map((a) => a.rotationGroupId))
       expect(positioned.filter((a) => a.startsInWater)).toHaveLength(2)
-      expect(new Set(positioned.map((a) => a.rotationGroupId)).size).toBe(1)
+      expect(groupIds.size).toBe(2)
+      for (const groupId of groupIds) expect(positioned.filter((a) => a.rotationGroupId === groupId && a.startsInWater)).toHaveLength(1)
     }
     expect(result.assignments.filter((a) => a.team === 1 && a.startsInWater)).toHaveLength(6)
-    expect(result.rotationGroups.find((group) => group.team === 1 && group.position === "goalkeeper")?.rotationSteps).toEqual([
+    const goalkeeperGroups = result.rotationGroups.filter((group) => group.team === 1 && group.position === "goalkeeper")
+    expect(goalkeeperGroups.map((group) => group.members.map((member) => member.signupId))).toEqual([[1, 3, 5], [2, 4]])
+    expect(goalkeeperGroups.map((group) => group.activeSlotCount)).toEqual([1, 1])
+    expect(goalkeeperGroups.flatMap((group) => group.rotationSteps)).toEqual([
       { outgoingSignupId: 1, incomingSignupId: 3 },
-      { outgoingSignupId: 2, incomingSignupId: 4 },
       { outgoingSignupId: 3, incomingSignupId: 5 },
-      { outgoingSignupId: 4, incomingSignupId: 1 },
-      { outgoingSignupId: 5, incomingSignupId: 2 },
+      { outgoingSignupId: 5, incomingSignupId: 1 },
+      { outgoingSignupId: 2, incomingSignupId: 4 },
+      { outgoingSignupId: 4, incomingSignupId: 2 },
     ])
     expect(result.assignments.filter((a) => a.team === 2 && a.startsInWater)).toHaveLength(3)
   })
 
-  it("erzeugt eine zyklisch gültige Rotationsreihenfolge für zwei aktive Plätze", () => {
-    const members = [1, 2, 3, 4, 5].map((signupId, index) => ({ signupId, playerId: signupId, name: String(signupId), rating: 1000, rotationOrder: index + 1, startsInWater: index < 2 }))
+  it("verteilt Positionsspieler deterministisch auf zwei getrennte Wechselplätze", () => {
+    const members = [1, 2, 3, 4, 5].map((signupId) => player(signupId, String(signupId), { forward: 1000 - signupId }, ["forward"]))
 
-    expect(buildRotationSteps(members, 2)).toEqual([
-      { outgoingSignupId: 1, incomingSignupId: 3 },
+    expect(buildPositionSlotGroups(members, "forward").map((group) => group.map((member) => member.signupId))).toEqual([[1, 3, 5], [2, 4]])
+    expect(buildRotationSteps([{ signupId: 2, playerId: 2, name: "2", rating: 1000, rotationOrder: 1, startsInWater: true }, { signupId: 4, playerId: 4, name: "4", rating: 1000, rotationOrder: 2, startsInWater: false }, { signupId: 5, playerId: 5, name: "5", rating: 1000, rotationOrder: 3, startsInWater: false }], 1)).toEqual([
       { outgoingSignupId: 2, incomingSignupId: 4 },
-      { outgoingSignupId: 3, incomingSignupId: 5 },
-      { outgoingSignupId: 4, incomingSignupId: 1 },
+      { outgoingSignupId: 4, incomingSignupId: 5 },
       { outgoingSignupId: 5, incomingSignupId: 2 },
     ])
   })
