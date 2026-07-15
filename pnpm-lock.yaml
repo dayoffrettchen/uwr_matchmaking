@@ -88,7 +88,7 @@ importers:
 packages:
 
   '@vitest/coverage-v8@3.2.7':
-    resolution: {integrity: sha512-hnORnjP/1P/zFEndoeX+n+t1RwWRJiJpMQ9OjEf0keg2H9XqztoP0D3KgZasC39RzGZKbil6iuy8ByHMCuu4UVA==}
+    resolution: {integrity: sha512-NEGWJS2XNu2PfRLQwOO3CTKj1tTETxNBdk454vDxVBhxJYhPaA/eS0nAI0c+1El1P7a60z8+i+ZrQoGESweGKg==}
     peerDependencies:
       vitest: 3.2.7
 
