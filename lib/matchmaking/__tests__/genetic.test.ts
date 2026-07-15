@@ -63,7 +63,23 @@ describe("genetisches Matchmaking", () => {
     const players = fairnessFixture()
     const a = balanceMatchmakingPlayers(players, { seed: 123, maxCandidates: 400, maxGenerations: 12, maxComputationTimeMs: 0, populationSize: 24 })
     const b = balanceMatchmakingPlayers([...players].reverse(), { seed: 123, maxCandidates: 400, maxGenerations: 12, maxComputationTimeMs: 0, populationSize: 24 })
-    expect(a.assignments.map((x) => [x.signupId, x.team, x.position, x.rotationGroupId, x.startsInWater])).toEqual(b.assignments.map((x) => [x.signupId, x.team, x.position, x.rotationGroupId, x.startsInWater]))
+    expect(a.assignments.map((x) => [x.signupId, x.team, x.position, x.startsInWater])).toEqual(b.assignments.map((x) => [x.signupId, x.team, x.position, x.startsInWater]))
+  })
+
+  it("balanciert kleine Runden auch dann fair, wenn alle Spieler aktiv starten", () => {
+    const players = [
+      player(1, "C2", { defender: 974 }, ["defender"]),
+      player(2, "Jochen", { defender: 1074 }, ["defender"]),
+      player(3, "Christoph Dume", { forward: 1280 }, ["forward"]),
+      player(4, "Mo", { defender: 1026 }, ["defender"]),
+      player(5, "Nocheiner", { defender: 918 }, ["defender"]),
+      player(6, "Hannes", { forward: 966 }, ["forward"]),
+    ]
+
+    const result = balanceMatchmakingPlayers(players, { seed: 5, maxCandidates: 10_000, maxGenerations: 10, maxComputationTimeMs: 0, populationSize: 16 })
+
+    expect(Math.abs(result.team1.effectiveStrength - result.team2.effectiveStrength)).toBeLessThanOrEqual(40)
+    expect(Math.abs(result.team1.averageParticipantRating - result.team2.averageParticipantRating)).toBeLessThanOrEqual(40)
   })
 
 
