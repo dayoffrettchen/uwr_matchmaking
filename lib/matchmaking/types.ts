@@ -1,6 +1,6 @@
 import type { LineupType, PlayerPosition, TeamNumber } from "@/lib/ratings/types"
 
-export type RotationGroupType = "single" | "pair" | "triple"
+export type RotationGroupType = "single" | "pair" | "triple" | "position"
 
 export type MatchmakingPlayer = {
   signupId: number
@@ -25,6 +25,11 @@ export type MatchmakingAssignment = {
   lineupType: LineupType
 }
 
+export type RotationStep = {
+  incomingSignupId: number
+  outgoingSignupId: number
+}
+
 export type RotationGroupMember = {
   signupId: number
   playerId: number
@@ -45,6 +50,7 @@ export type RotationGroup = {
   effectiveRating: number
   ratingSpread: number
   activePairRatings?: number[]
+  rotationSteps?: RotationStep[]
 }
 
 export type TeamSummary = {

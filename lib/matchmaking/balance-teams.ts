@@ -8,13 +8,13 @@ import { MAX_ACTIVE_PLAYERS_PER_TEAM, MAX_CANDIDATES, MAX_COMPUTATION_TIME_MS } 
 import { getTargetLineup } from "./target-lineup"
 import { runGeneticOptimization, type GeneticOptions } from "./genetic"
 import type { DraftAssignment } from "./candidate"
-import type { MatchmakingAssignment, MatchmakingPlayer, MatchmakingResult, RotationGroup, TeamSummary } from "./types"
+import type { MatchmakingAssignment, MatchmakingPlayer, MatchmakingResult, RotationGroup, RotationGroupMember, RotationStep, TeamSummary } from "./types"
 
 
 function average(values: number[]): number { return values.reduce((sum, value) => sum + value, 0) / Math.max(1, values.length) }
 function spread(values: number[]): number { return values.length ? Math.max(...values) - Math.min(...values) : 0 }
 
-function makeGroup(id: number, team: 1 | 2, position: PlayerPosition, members: MatchmakingPlayer[], type: "single" | "pair" | "triple", startIndexes: Set<number>): RotationGroup {
+function makeGroup(id: number, team: 1 | 2, position: PlayerPosition, members: MatchmakingPlayer[], type: RotationGroup["type"], startIndexes: Set<number>): RotationGroup {
   const ratings = members.map((member) => member.ratings[position])
   const activeSlotCount: 1 | 2 = startIndexes.size > 1 ? 2 : 1
   const activePairRatings = type === "triple" && activeSlotCount > 1 ? ratings.map((rating, index) => (rating + ratings[(index + 1) % ratings.length]) / 2) : undefined
@@ -34,6 +34,47 @@ function makeGroup(id: number, team: 1 | 2, position: PlayerPosition, members: M
     ratingSpread: Math.round(activePairRatings ? spread(activePairRatings) : spread(ratings)),
     activePairRatings: activePairRatings?.map(Math.round),
   }
+}
+
+export function buildRotationSteps(members: RotationGroupMember[], activeSlotCount: 1 | 2): RotationStep[] {
+  if (members.length <= activeSlotCount) return []
+  return members.map((member, index) => ({
+    outgoingSignupId: member.signupId,
+    incomingSignupId: members[(index + activeSlotCount) % members.length].signupId,
+  }))
+}
+
+function makeFinalLineupGroup(id: number, team: 1 | 2, position: PlayerPosition, members: MatchmakingPlayer[]): RotationGroup {
+  const activeSlotCount = Math.min(2, members.length) as 1 | 2
+  const startIndexes = new Set(Array.from({ length: activeSlotCount }, (_, index) => index))
+  const type: RotationGroup["type"] = members.length === 1 ? "single" : members.length === 2 ? "pair" : "position"
+  const group = makeGroup(id, team, position, members, type, startIndexes)
+  return { ...group, rotationSteps: buildRotationSteps(group.members, activeSlotCount) }
+}
+
+export function finalizeUnderwaterRugbyLineup(players: MatchmakingPlayer[], assignments: MatchmakingAssignment[], warnings: string[]): { assignments: MatchmakingAssignment[]; rotationGroups: RotationGroup[]; team1: TeamSummary; team2: TeamSummary } {
+  const bySignup = new Map(players.map((p) => [p.signupId, p]))
+  const rotationGroups: RotationGroup[] = []
+  let nextGroupId = 1
+  for (const team of [1, 2] as const) for (const position of PLAYER_POSITIONS) {
+    const members = assignments
+      .filter((a) => a.team === team && a.position === position)
+      .map((a) => bySignup.get(a.signupId)!)
+      .sort((a, b) => b.ratings[position] - a.ratings[position] || a.signupId - b.signupId)
+    if (members.length === 0) {
+      warnings.push(`Team ${team}: Keine Spieler für ${position} zugeordnet. Die finale Aufstellung ist dort unterbesetzt.`)
+      continue
+    }
+    if (members.length < 2) warnings.push(`Team ${team}: Nur ${members.length} Spieler für ${position} zugeordnet. Es starten nur vorhandene Spieler im Wasser.`)
+    rotationGroups.push(makeFinalLineupGroup(nextGroupId++, team, position, members))
+  }
+  const finalizedAssignments = assignments.map((assignment) => {
+    const group = rotationGroups.find((candidate) => candidate.team === assignment.team && candidate.position === assignment.position && candidate.members.some((member) => member.signupId === assignment.signupId))
+    const member = group?.members.find((candidate) => candidate.signupId === assignment.signupId)
+    if (!group || !member) throw new Error("Für eine Anmeldung konnte keine finale Wechselgruppe erstellt werden.")
+    return { ...assignment, rotationGroupId: group.id, rotationGroupType: group.type, rotationOrder: member.rotationOrder, startsInWater: member.startsInWater, lineupType: member.startsInWater ? "active" : "substitute" }
+  })
+  return { assignments: finalizedAssignments, rotationGroups, team1: summarize(bySignup, finalizedAssignments, rotationGroups, 1), team2: summarize(bySignup, finalizedAssignments, rotationGroups, 2) }
 }
 
 function pairings<T>(items: T[]): Array<[T[], T[]]> {
@@ -153,11 +194,14 @@ export function balanceMatchmakingPlayers(input: MatchmakingPlayer[], options: P
   }, warnings)
   for (const team of [1, 2] as const) if (result.assignments.filter((a) => a.team === team && a.startsInWater).length > MAX_ACTIVE_PLAYERS_PER_TEAM) warnings.push("Mehr als sechs Spieler wurden als aktiv eingeplant.")
   for (const group of result.rotationGroups.filter((g) => g.type === "triple" && g.ratingSpread > 200)) warnings.push(`Die Dreier-Wechselgruppe ${group.members.map((m) => m.name).join("/")} besitzt eine stark schwankende aktive Paarstärke. Die Elo-Spannweite dieser Wechselgruppe beträgt ${group.ratingSpread} Punkte.`)
-  const diff = Math.abs(result.team1.effectiveStrength - result.team2.effectiveStrength)
+  const finalWarnings: string[] = []
+  const finalLineup = finalizeUnderwaterRugbyLineup(players, result.assignments, finalWarnings)
+  warnings.push(...finalWarnings)
+  const diff = Math.abs(finalLineup.team1.effectiveStrength - finalLineup.team2.effectiveStrength)
   const bySignup = new Map(players.map((p) => [p.signupId, p]))
   const unstable = result.assignments.filter((a) => getRatingStatus(bySignup.get(a.signupId)!.gamesPlayed[a.position]) !== "established").length
   const quality = warnings.length || diff > 80 ? "low" : diff > 25 || unstable > result.assignments.length / 3 ? "medium" : "high"
-  return { ...result, warnings, computationTimeMs: Date.now() - started, optimality: "best-found", quality }
+  return { ...result, ...finalLineup, warnings, computationTimeMs: Date.now() - started, optimality: "best-found", quality }
 }
 
 async function loadMatchmakingPlayers(trainingId: number) {
@@ -178,7 +222,8 @@ export async function rebuildManualLineup(trainingId: number) {
     .map((row) => ({ signupId: row.signupId, playerId: row.playerId, team: row.team, position: row.assignedPosition }))
   if (drafts.length === 0) return
   const warnings: string[] = []
-  const { assignments } = completeAssignments(normalizedPlayers, drafts, warnings)
+  const evaluated = completeAssignments(normalizedPlayers, drafts, warnings)
+  const { assignments } = finalizeUnderwaterRugbyLineup(normalizedPlayers, evaluated.assignments, warnings)
   await db.transaction(async (tx) => {
     for (const assignment of assignments) await tx.update(signups).set({ team: assignment.team, assignedPosition: assignment.position, lineupType: assignment.lineupType, rotationGroupId: assignment.rotationGroupId, rotationGroupType: assignment.rotationGroupType, rotationOrder: assignment.rotationOrder, startsInWater: assignment.startsInWater }).where(and(eq(signups.id, assignment.signupId), eq(signups.trainingId, trainingId)))
   })

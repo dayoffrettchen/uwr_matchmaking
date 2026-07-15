@@ -245,9 +245,13 @@ function PositionGroups({ position, players, canManage, movingSignupId, isDropTa
 
 function RotationGroupCard({ groupId, members, canManage, movingSignupId, onDragStart, onDragEnd }: { groupId: number; members: RosterPlayer[]; canManage: boolean; movingSignupId: number | null; onDragStart: (signupId: number) => void; onDragEnd: () => void }) {
   const type = members[0]?.rotationGroupType ?? "single"
-  const label = type === "triple" ? "Dreier-Wechselgruppe" : type === "pair" ? "Zweierwechsel" : "Einzelbesetzung"
   const starters = members.filter((member) => member.startsInWater ?? member.lineupType !== "substitute")
   const waiting = members.filter((member) => !(member.startsInWater ?? member.lineupType !== "substitute"))
+  const activeSlotCount = Math.max(1, starters.length)
+  const label = members.length < 2 ? "Unterbesetzt" : members.length === activeSlotCount ? "Doppelbesetzung" : "Positionswechselgruppe"
+  const rotationSteps = members.length > activeSlotCount
+    ? members.map((player, index) => ({ incoming: members[(index + activeSlotCount) % members.length], outgoing: player }))
+    : []
 
   return (
     <div className="min-w-0 rounded-md border px-3 py-2 text-sm">
@@ -270,8 +274,8 @@ function RotationGroupCard({ groupId, members, canManage, movingSignupId, onDrag
           </li>
         ))}
       </ol>
-      {type === "pair" && <p className="mt-2 text-muted-foreground">Wechsel: {members.map((p) => p.name).join(" ↔ ")}</p>}
-      {type === "triple" && <p className="mt-2 text-muted-foreground">Rotation: {members.map((p, index) => `${p.name} rein → ${members[(index + members.length - 2) % members.length]?.name} raus`).join(" · ")}</p>}
+      {type === "pair" && rotationSteps.length === 0 && <p className="mt-2 text-muted-foreground">Wechsel: {members.map((p) => p.name).join(" ↔ ")}</p>}
+      {rotationSteps.length > 0 && <p className="mt-2 text-muted-foreground">Rotation: {rotationSteps.map(({ incoming, outgoing }) => `${incoming.name} rein → ${outgoing.name} raus`).join(" · ")}</p>}
     </div>
   )
 }

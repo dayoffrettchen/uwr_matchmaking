@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import { PLAYER_POSITIONS, type PlayerPosition } from "@/lib/ratings/types"
-import { balanceMatchmakingPlayers } from "../balance-teams"
+import { balanceMatchmakingPlayers, buildRotationSteps, finalizeUnderwaterRugbyLineup } from "../balance-teams"
 import { fromDraftAssignments } from "../candidate"
 import { OBJECTIVE_WEIGHTS } from "../constants"
 import { evaluateCandidate, getPositionPenalty } from "../fitness"
@@ -48,6 +48,54 @@ describe("genetisches Matchmaking", () => {
     expect(new Set(result.assignments.map((a) => a.signupId)).size).toBe(12)
     const byId = new Map(fairnessFixture().map((p) => [p.signupId, p]))
     for (const assignment of result.assignments) expect(byId.get(assignment.signupId)!.eligiblePositions).toContain(assignment.position)
+  })
+
+
+  it("finalisiert Positionswechselgruppen mit zwei aktiven Spielern und gültiger Rotation", () => {
+    const players = [
+      ...[1, 2, 3, 4, 5].map((id) => player(id, `G${id}`, { goalkeeper: 1200 - id }, ["goalkeeper"])),
+      ...[6, 7, 8].map((id) => player(id, `D${id}`, { defender: 1200 - id }, ["defender"])),
+      ...[9, 10, 11].map((id) => player(id, `F${id}`, { forward: 1200 - id }, ["forward"])),
+      player(12, "G6", { goalkeeper: 1100 }, ["goalkeeper"]),
+      player(13, "D9", { defender: 1100 }, ["defender"]),
+      player(14, "F9", { forward: 1100 }, ["forward"]),
+    ]
+    const assignments = [
+      ...[1, 2, 3, 4, 5].map((signupId) => ({ signupId, playerId: signupId, team: 1 as const, position: "goalkeeper" as const })),
+      ...[6, 7, 8].map((signupId) => ({ signupId, playerId: signupId, team: 1 as const, position: "defender" as const })),
+      ...[9, 10, 11].map((signupId) => ({ signupId, playerId: signupId, team: 1 as const, position: "forward" as const })),
+      { signupId: 12, playerId: 12, team: 2 as const, position: "goalkeeper" as const },
+      { signupId: 13, playerId: 13, team: 2 as const, position: "defender" as const },
+      { signupId: 14, playerId: 14, team: 2 as const, position: "forward" as const },
+    ].map((assignment) => ({ ...assignment, rotationGroupId: 0, rotationGroupType: "single" as const, rotationOrder: 0, startsInWater: false, lineupType: "substitute" as const }))
+    const result = finalizeUnderwaterRugbyLineup(players, assignments, [])
+
+    for (const position of PLAYER_POSITIONS) {
+      const positioned = result.assignments.filter((a) => a.team === 1 && a.position === position)
+      expect(positioned.filter((a) => a.startsInWater)).toHaveLength(2)
+      expect(new Set(positioned.map((a) => a.rotationGroupId)).size).toBe(1)
+    }
+    expect(result.assignments.filter((a) => a.team === 1 && a.startsInWater)).toHaveLength(6)
+    expect(result.rotationGroups.find((group) => group.team === 1 && group.position === "goalkeeper")?.rotationSteps).toEqual([
+      { outgoingSignupId: 1, incomingSignupId: 3 },
+      { outgoingSignupId: 2, incomingSignupId: 4 },
+      { outgoingSignupId: 3, incomingSignupId: 5 },
+      { outgoingSignupId: 4, incomingSignupId: 1 },
+      { outgoingSignupId: 5, incomingSignupId: 2 },
+    ])
+    expect(result.assignments.filter((a) => a.team === 2 && a.startsInWater)).toHaveLength(3)
+  })
+
+  it("erzeugt eine zyklisch gültige Rotationsreihenfolge für zwei aktive Plätze", () => {
+    const members = [1, 2, 3, 4, 5].map((signupId, index) => ({ signupId, playerId: signupId, name: String(signupId), rating: 1000, rotationOrder: index + 1, startsInWater: index < 2 }))
+
+    expect(buildRotationSteps(members, 2)).toEqual([
+      { outgoingSignupId: 1, incomingSignupId: 3 },
+      { outgoingSignupId: 2, incomingSignupId: 4 },
+      { outgoingSignupId: 3, incomingSignupId: 5 },
+      { outgoingSignupId: 4, incomingSignupId: 1 },
+      { outgoingSignupId: 5, incomingSignupId: 2 },
+    ])
   })
 
   it("liefert keine schlechtere Lösung als die Greedy-Baseline und verbessert effektive Stärke", () => {
