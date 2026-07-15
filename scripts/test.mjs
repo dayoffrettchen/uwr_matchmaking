@@ -51,7 +51,11 @@ function describe(name, fn) {
 }
 
 function it(name, fn) {
-  tests.push({ name: [...suiteStack, name].join(" > "), fn })
+  tests.push({ name: [...suiteStack, name].join(" > "), fn, todo: false })
+}
+
+it.todo = function todo(name) {
+  tests.push({ name: [...suiteStack, name].join(" > "), fn: null, todo: true })
 }
 
 function expect(received) {
@@ -100,7 +104,11 @@ for (const testFile of findTestFiles(rootDir)) {
 }
 
 let failed = 0
-for (const { name, fn } of tests) {
+for (const { name, fn, todo } of tests) {
+  if (todo) {
+    console.log(`○ TODO ${name}`)
+    continue
+  }
   try {
     await fn()
     console.log(`✓ ${name}`)
@@ -111,5 +119,6 @@ for (const { name, fn } of tests) {
   }
 }
 
-console.log(`\n${tests.length - failed} passed, ${failed} failed, ${tests.length} total`)
+const todo = tests.filter((test) => test.todo).length
+console.log(`\n${tests.length - failed - todo} passed, ${failed} failed, ${todo} todo, ${tests.length} total`)
 if (failed > 0) process.exitCode = 1

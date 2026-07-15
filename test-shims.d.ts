@@ -2,7 +2,10 @@ declare module "vitest" {
   type TestCallback = () => void | Promise<void>
 
   export function describe(name: string, fn: TestCallback): void
-  export function it(name: string, fn: TestCallback): void
+  export const it: {
+    (name: string, fn: TestCallback): void
+    todo(name: string): void
+  }
   export function expect<T>(received: T): {
     toBe(expected: T): void
     toEqual(expected: unknown): void
