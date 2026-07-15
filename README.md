@@ -27,7 +27,7 @@ The user-facing application copy is primarily German because the club workflow i
 
 ## Current business rule
 
-The intended complete active lineup is two goalkeepers, two defenders, and two forwards whenever feasible. A dedicated matchmaking refactor is tracked separately if the implementation is not yet fully aligned with that rule; this repository foundation work does not change matchmaking behavior.
+The intended complete active lineup is two goalkeepers, two defenders, and two forwards whenever feasible. A dedicated matchmaking refactor is tracked separately if the implementation is not yet fully aligned with that rule; this repository foundation work does not change matchmaking behavior. See [docs/matchmaking-domain-contract.md](docs/matchmaking-domain-contract.md) for the executable contract and current characterization scope.
 
 ## Prerequisites
 
