@@ -47,6 +47,7 @@ export function runGeneticOptimization(input: MatchmakingPlayer[], options: Gene
   pushEval(population, fromDraftAssignments(players, buildGreedySeed(players, { reverseTeamPriority: true })))
   pushEval(population, snake(players))
   for (const pos of PLAYER_POSITIONS) pushEval(population, byPosition(players, pos))
+  for (const candidate of enumerateSmallRosterCandidates(players)) pushEval(population, candidate)
   fillPopulation(population, options.populationSize, () => randomCandidate(players, prng), pushEval, () => evaluated, options.maxCandidates, started, options.maxComputationTimeMs)
   for (let i = 0; i < Math.min(12, options.populationSize); i++) pushEval(population, mutate(players, greedy.candidate, prng, best))
 
@@ -99,6 +100,37 @@ function fillPopulation(
     if (population.length === beforeLength && getEvaluated() === beforeEvaluated) attemptsWithoutGrowth++
     else attemptsWithoutGrowth = 0
   }
+}
+
+function enumerateSmallRosterCandidates(players: MatchmakingPlayer[]): Candidate[] {
+  if (players.length > 10) return []
+  const targetTeam1Size = Math.ceil(players.length / 2)
+  const candidates: Candidate[] = []
+  const current: Candidate = []
+
+  function visit(index: number, team1Count: number) {
+    if (candidates.length >= 20_000) return
+    if (index === players.length) {
+      if (team1Count === targetTeam1Size) candidates.push(current.map((gene) => ({ ...gene })))
+      return
+    }
+
+    const remaining = players.length - index - 1
+    for (const team of [1, 2] as const) {
+      const nextTeam1Count = team1Count + (team === 1 ? 1 : 0)
+      if (nextTeam1Count > targetTeam1Size) continue
+      if (nextTeam1Count + remaining < targetTeam1Size) continue
+
+      for (const position of players[index].eligiblePositions) {
+        current.push({ signupId: players[index].signupId, team, position })
+        visit(index + 1, nextTeam1Count)
+        current.pop()
+      }
+    }
+  }
+
+  visit(0, 0)
+  return candidates
 }
 
 function snake(players: MatchmakingPlayer[]): Candidate {

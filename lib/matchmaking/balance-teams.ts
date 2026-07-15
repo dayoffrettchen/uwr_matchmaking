@@ -43,14 +43,14 @@ function pairings<T>(items: T[]): Array<[T[], T[]]> {
 function buildSingleSlotGroups(members: MatchmakingPlayer[], slots: number, position: PlayerPosition): MatchmakingPlayer[][] {
   const groups = Array.from({ length: Math.min(slots, members.length) }, () => [] as MatchmakingPlayer[])
   members.forEach((member, index) => groups[index % groups.length].push(member))
-  return groups.sort((a, b) => b.length - a.length || b[0].ratings[position] - a[0].ratings[position])
+  return groups.sort((a, b) => b.length - a.length || b[0].ratings[position] - a[0].ratings[position] || a[0].signupId - b[0].signupId)
 }
 
 export function buildRotationGroups(playersBySignup: Map<number, MatchmakingPlayer>, drafts: DraftAssignment[], target: Record<PlayerPosition, number>, warnings: string[]): RotationGroup[] {
   const groups: RotationGroup[] = []
   let nextGroupId = 1
   for (const team of [1, 2] as const) for (const position of PLAYER_POSITIONS) {
-    const members = drafts.filter((a) => a.team === team && a.position === position).map((a) => playersBySignup.get(a.signupId)!).sort((a, b) => b.ratings[position] - a.ratings[position])
+    const members = drafts.filter((a) => a.team === team && a.position === position).map((a) => playersBySignup.get(a.signupId)!).sort((a, b) => b.ratings[position] - a.ratings[position] || a.signupId - b.signupId)
     const slots = target[position]
     if (members.length === 0) continue
     if (members.length < slots) warnings.push(`Für Team ${team} konnte keine gültige Wechselgruppe für ${position} erstellt werden.`)
