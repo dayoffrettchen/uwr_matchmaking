@@ -220,3 +220,44 @@ describe("genetisches Matchmaking", () => {
     expect(result.assignments.every((assignment) => assignment.position === "forward")).toBe(true)
   })
 })
+
+describe("candidate accounting diagnostics", () => {
+  const flexibleThirty = () => Array.from({ length: 30 }, (_, index) => player(index + 1, `Flex${index + 1}`, { goalkeeper: 1000 + index, defender: 1000 + index, forward: 1000 + index }))
+  const singlePositionThirty = () => Array.from({ length: 30 }, (_, index) => {
+    const position = PLAYER_POSITIONS[index % PLAYER_POSITIONS.length]
+    return player(index + 1, `Single${index + 1}`, { [position]: 1000 + index }, [position])
+  })
+
+  it("keeps a thirty-player flexible run honest and leaves genetic budget", () => {
+    const result = balanceMatchmakingPlayers(flexibleThirty(), { seed: 93, maxCandidates: 500, maxGenerations: 20, maxComputationTimeMs: 0, populationSize: 48 })
+    expect(result.candidatesEvaluated).toBeLessThanOrEqual(500)
+    expect(result.diagnostics!.totalCandidates).toBe(result.diagnostics!.geneticCandidates + result.diagnostics!.mandatorySamePositionCandidates + result.diagnostics!.optionalLocalCandidates)
+    expect(result.diagnostics!.totalCandidates).toBe(result.candidatesEvaluated)
+    expect(result.diagnostics!.geneticCandidates).toBeGreaterThan(1)
+    expect(result.diagnostics!.mandatorySamePositionRequiredCandidates).toBeLessThanOrEqual(Math.floor(30 * 30 / 4))
+    expect(result.diagnostics!.mandatorySamePositionCandidates).toBeLessThanOrEqual(result.diagnostics!.mandatorySamePositionRequiredCandidates + result.diagnostics!.optionalLocalCandidates)
+  })
+
+  it("bounds one complete same-position sweep for thirty single-position players", () => {
+    const result = balanceMatchmakingPlayers(singlePositionThirty(), { seed: 94, maxCandidates: 500, maxGenerations: 20, maxComputationTimeMs: 0, populationSize: 48 })
+    expect(result.diagnostics!.mandatorySamePositionRequiredCandidates).toBeLessThanOrEqual(225)
+    expect(result.candidatesEvaluated).toBeLessThanOrEqual(500)
+    expect(result.diagnostics!.totalCandidates).toBe(result.candidatesEvaluated)
+  })
+
+  it("reports partial mandatory search for tiny budgets without hidden candidates", () => {
+    const result = balanceMatchmakingPlayers(flexibleThirty(), { seed: 95, maxCandidates: 20, maxGenerations: 20, maxComputationTimeMs: 0, populationSize: 48 })
+    expect(result.candidatesEvaluated).toBeLessThanOrEqual(20)
+    expect(result.diagnostics!.totalCandidates).toBe(result.candidatesEvaluated)
+    expect(result.diagnostics!.mandatorySamePositionCompleted).toBe(false)
+    expect(result.warnings.some((warning) => warning.includes("verpflichtende Gleichpositions-Suche"))).toBe(true)
+  })
+
+  it("keeps zero budget on the documented greedy fallback", () => {
+    const result = balanceMatchmakingPlayers(flexibleThirty(), { seed: 96, maxCandidates: 0, maxGenerations: 0, maxComputationTimeMs: 0, populationSize: 0 })
+    expect(result.candidatesEvaluated).toBe(1)
+    expect(result.diagnostics!.mandatorySamePositionCandidates).toBe(0)
+    expect(result.diagnostics!.optionalLocalCandidates).toBe(0)
+    expect(result.diagnostics!.totalCandidates).toBe(1)
+  })
+})
