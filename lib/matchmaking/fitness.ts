@@ -58,8 +58,24 @@ export function calculateTargetLineupPenalty(assignments: MatchmakingAssignment[
   }, 0)
 }
 
+export function compareFitnessQuality(a: FitnessBreakdown, b: FitnessBreakdown): number {
+  return a.hardViolations - b.hardViolations
+    || a.targetLineupPenalty - b.targetLineupPenalty
+    || a.activePlayerDifference - b.activePlayerDifference
+    || a.effectiveStrengthDifference - b.effectiveStrengthDifference
+    || a.positionStrengthDifference - b.positionStrengthDifference
+    || a.startingLineupDifference - b.startingLineupDifference
+    || a.substituteAdvantagePenalty - b.substituteAdvantagePenalty
+    || a.rotationMatchPenalty - b.rotationMatchPenalty
+    || a.rotationSpreadPenalty - b.rotationSpreadPenalty
+    || a.positionCrowdingPenalty - b.positionCrowdingPenalty
+    || a.preferencePenalty - b.preferencePenalty
+    || a.confidencePenalty - b.confidencePenalty
+    || a.unratedPlayerPenalty - b.unratedPlayerPenalty
+}
+
 export function compareBreakdowns(a: FitnessBreakdown, b: FitnessBreakdown, aTie = "", bTie = ""): number {
-  return a.hardViolations - b.hardViolations || a.total - b.total || aTie.localeCompare(bTie)
+  return compareFitnessQuality(a, b) || aTie.localeCompare(bTie)
 }
 
 export function evaluateCandidate(players: MatchmakingPlayer[], candidate: Candidate, hash = ""): EvaluatedCandidate | null {
