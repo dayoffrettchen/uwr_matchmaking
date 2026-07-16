@@ -13,8 +13,8 @@ export type PersistedLineupStrengthRow = {
 }
 
 export type PersistedLineupDiagnostic =
-  | { code: "INVALID_TEAM" | "INVALID_POSITION" | "MISSING_GROUP" | "MISSING_RATING" | "MISSING_START_STATE"; signupId: number }
-  | { code: "INVALID_STARTER_COUNT" | "DUPLICATE_ROTATION_ORDER" | "INVALID_ROTATION_ORDER"; team: TeamNumber; position: PlayerPosition; rotationGroupId: number }
+  | { code: "INVALID_TEAM" | "INVALID_POSITION" | "MISSING_GROUP" | "INVALID_GROUP_ID" | "MISSING_RATING" | "MISSING_START_STATE"; signupId: number }
+  | { code: "INVALID_STARTER_COUNT" | "DUPLICATE_ROTATION_ORDER" | "INVALID_ROTATION_ORDER" | "MISSING_ROTATION_ORDER"; team: TeamNumber; position: PlayerPosition; rotationGroupId: number }
 
 export type PersistedTeamStrength = {
   team: TeamNumber
@@ -52,8 +52,9 @@ function summarizeTeam(rows: PersistedLineupStrengthRow[], team: TeamNumber): Pe
     const position = row.position ?? row.assignedPosition
     if (!isTeam(row.team)) { diagnostics.push({ code: "INVALID_TEAM", signupId: row.signupId }); continue }
     if (!isPosition(position)) { diagnostics.push({ code: "INVALID_POSITION", signupId: row.signupId }); continue }
-    if (typeof row.rotationGroupId !== "number") { diagnostics.push({ code: "MISSING_GROUP", signupId: row.signupId }); continue }
-    if (typeof row.assignedRating !== "number") { diagnostics.push({ code: "MISSING_RATING", signupId: row.signupId }); missingRatingSignupIds.push(row.signupId); continue }
+    if (row.rotationGroupId === null || row.rotationGroupId === undefined) { diagnostics.push({ code: "MISSING_GROUP", signupId: row.signupId }); continue }
+    if (!Number.isInteger(row.rotationGroupId) || row.rotationGroupId <= 0) { diagnostics.push({ code: "INVALID_GROUP_ID", signupId: row.signupId }); continue }
+    if (typeof row.assignedRating !== "number" || !Number.isFinite(row.assignedRating)) { diagnostics.push({ code: "MISSING_RATING", signupId: row.signupId }); missingRatingSignupIds.push(row.signupId); continue }
     if (typeof row.startsInWater !== "boolean") { diagnostics.push({ code: "MISSING_START_STATE", signupId: row.signupId }); continue }
     valid.push({ ...row, team: row.team, normalizedPosition: position, rotationGroupId: row.rotationGroupId, assignedRating: row.assignedRating, startsInWater: row.startsInWater })
   }
@@ -69,9 +70,11 @@ function summarizeTeam(rows: PersistedLineupStrengthRow[], team: TeamNumber): Pe
     const first = members[0]
     const starterCount = members.filter((member) => member.startsInWater).length
     if (starterCount !== 1) diagnostics.push({ code: "INVALID_STARTER_COUNT", team, position: first.normalizedPosition, rotationGroupId: first.rotationGroupId })
-    const orders = members.map((member) => member.rotationOrder).filter((order): order is number => typeof order === "number")
-    if (orders.some((order) => order <= 0)) diagnostics.push({ code: "INVALID_ROTATION_ORDER", team, position: first.normalizedPosition, rotationGroupId: first.rotationGroupId })
-    if (new Set(orders).size !== orders.length) diagnostics.push({ code: "DUPLICATE_ROTATION_ORDER", team, position: first.normalizedPosition, rotationGroupId: first.rotationGroupId })
+    const orders = members.map((member) => member.rotationOrder)
+    if (orders.some((order) => order === null || order === undefined)) diagnostics.push({ code: "MISSING_ROTATION_ORDER", team, position: first.normalizedPosition, rotationGroupId: first.rotationGroupId })
+    const numericOrders = orders.filter((order): order is number => typeof order === "number")
+    if (numericOrders.some((order) => !Number.isInteger(order) || order <= 0)) diagnostics.push({ code: "INVALID_ROTATION_ORDER", team, position: first.normalizedPosition, rotationGroupId: first.rotationGroupId })
+    if (new Set(numericOrders).size !== numericOrders.length) diagnostics.push({ code: "DUPLICATE_ROTATION_ORDER", team, position: first.normalizedPosition, rotationGroupId: first.rotationGroupId })
     slots.push({ members: members.map((member) => ({ rating: member.assignedRating, startsInWater: member.startsInWater })) })
   }
 

@@ -53,4 +53,40 @@ describe("persisted-lineup-strength", () => {
     const missingStart = summarizePersistedLineupStrength([{ signupId: 1, team: 1, position: "defender", rotationGroupId: 1, assignedRating: 1000, startsInWater: null, rotationOrder: 1 }])
     expect(missingStart.teams[1].diagnostics.map((d) => d.code)).toContain("MISSING_START_STATE")
   })
+
+  it("rejects malformed group ids, rotation orders, and non-finite ratings", () => {
+    const cases = [
+      { rows: [{ ...row(1, 1, "defender", 0, 1000) }], code: "INVALID_GROUP_ID" },
+      { rows: [{ ...row(1, 1, "defender", -1, 1000) }], code: "INVALID_GROUP_ID" },
+      { rows: [{ ...row(1, 1, "defender", 1.5, 1000) }], code: "INVALID_GROUP_ID" },
+      { rows: [{ ...row(1, 1, "defender", 1, 1000), rotationOrder: null }], code: "MISSING_ROTATION_ORDER" },
+      { rows: [row(1, 1, "defender", 1, 1000, true, 0)], code: "INVALID_ROTATION_ORDER" },
+      { rows: [row(1, 1, "defender", 1, 1000, true, -1)], code: "INVALID_ROTATION_ORDER" },
+      { rows: [row(1, 1, "defender", 1, 1000, true), row(2, 1, "defender", 1, 990, false, 1)], code: "DUPLICATE_ROTATION_ORDER" },
+      { rows: [row(1, 1, "defender", 1, Number.NaN, true)], code: "MISSING_RATING" },
+    ]
+
+    for (const { rows, code } of cases) {
+      const summary = summarizePersistedLineupStrength(rows)
+      expect(summary.teams[1].complete).toBe(false)
+      expect(summary.teams[1].effectiveStrength).toBe(null)
+      expect(summary.teams[1].diagnostics.map((d) => d.code)).toContain(code)
+    }
+  })
+
+  it("keeps complete generated-style persisted lineups valid", () => {
+    const rows = [
+      row(1, 1, "goalkeeper", 1, 1000), row(2, 1, "goalkeeper", 2, 1000),
+      row(3, 1, "defender", 3, 1000), row(4, 1, "defender", 4, 1000),
+      row(5, 1, "forward", 5, 1000), row(6, 1, "forward", 6, 1000),
+      row(7, 2, "goalkeeper", 1, 1000), row(8, 2, "goalkeeper", 2, 1000),
+      row(9, 2, "defender", 3, 1000), row(10, 2, "defender", 4, 1000),
+      row(11, 2, "forward", 5, 1000), row(12, 2, "forward", 6, 1000),
+    ]
+    const summary = summarizePersistedLineupStrength(rows)
+    expect(summary.teams[1].complete).toBe(true)
+    expect(summary.teams[2].complete).toBe(true)
+    expect(summary.strengthDifference).toBe(0)
+  })
+
 })

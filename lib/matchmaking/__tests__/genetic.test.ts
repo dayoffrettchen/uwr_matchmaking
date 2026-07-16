@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest"
 import { PLAYER_POSITIONS, type PlayerPosition } from "@/lib/ratings/types"
 import { balanceMatchmakingPlayers, buildPositionSlotGroups, buildRotationSteps, finalizeUnderwaterRugbyLineup } from "../balance-teams"
 import { fromDraftAssignments } from "../candidate"
-import { runMandatorySamePositionLocalSearch } from "../genetic"
+import { countSamePositionSwapPairs, runMandatorySamePositionLocalSearch } from "../genetic"
 import { summarizePersistedLineupStrength } from "../persisted-lineup-strength"
 import { expectNoImprovingSamePositionSwap } from "./fixtures/domain-contract"
 import { OBJECTIVE_WEIGHTS } from "../constants"
@@ -213,6 +213,40 @@ describe("genetisches Matchmaking", () => {
     expect(result.assignments.some((assignment) => assignment.team === 2)).toBe(true)
   })
 
+
+  it("reports honest candidate accounting for zero, tiny, single-position, flexible, and completed searches", () => {
+    const flexible30 = Array.from({ length: 30 }, (_, index) => player(index + 1, `Flex${index + 1}`, { goalkeeper: 1000 + index, defender: 990 + index, forward: 980 + index }))
+    const flex = balanceMatchmakingPlayers(flexible30, { seed: 30, maxCandidates: 500, maxGenerations: 50, maxComputationTimeMs: 0, populationSize: 32 })
+    expect(flex.candidatesEvaluated).toBeLessThanOrEqual(500)
+    expect(flex.diagnostics!.mandatorySamePositionCandidates + flex.diagnostics!.optionalLocalCandidates).toBeLessThan(flex.candidatesEvaluated)
+    expect(flex.candidatesEvaluated - flex.diagnostics!.mandatorySamePositionCandidates - flex.diagnostics!.optionalLocalCandidates).toBeGreaterThan(1)
+
+    const single30 = Array.from({ length: 30 }, (_, index) => player(index + 1, `Single${index + 1}`, { defender: 1000 + index }, ["defender"]))
+    const single = balanceMatchmakingPlayers(single30, { seed: 31, maxCandidates: 500, maxGenerations: 50, maxComputationTimeMs: 0, populationSize: 32 })
+    expect(single.diagnostics!.mandatorySamePositionRequiredCandidates / Math.max(1, single.diagnostics!.mandatorySamePositionSweepsStarted)).toBeLessThanOrEqual(225)
+    expect(single.diagnostics!.mandatorySamePositionCandidates + single.diagnostics!.optionalLocalCandidates).toBeLessThanOrEqual(single.candidatesEvaluated)
+    expect(single.candidatesEvaluated).toBeLessThanOrEqual(500)
+
+    const tiny = balanceMatchmakingPlayers(fairnessFixture(), { seed: 32, maxCandidates: 5, maxGenerations: 50, maxComputationTimeMs: 0, populationSize: 32 })
+    expect(tiny.candidatesEvaluated).toBeLessThanOrEqual(5)
+    expect(tiny.diagnostics!.mandatorySamePositionCompleted).toBe(false)
+    expect(tiny.diagnostics!.mandatorySamePositionCandidates).toBeLessThan(tiny.diagnostics!.mandatorySamePositionRequiredCandidates)
+
+    const zero = balanceMatchmakingPlayers(fairnessFixture(), { seed: 33, maxCandidates: 0, maxGenerations: 0, maxComputationTimeMs: -1, populationSize: 0 })
+    expect(zero.candidatesEvaluated).toBe(1)
+    expect(zero.diagnostics!.mandatorySamePositionCandidates).toBe(0)
+    expect(zero.diagnostics!.optionalLocalCandidates).toBe(0)
+    expect(zero.diagnostics!.mandatorySamePositionRequiredCandidates).toBeGreaterThan(0)
+    expect(zero.diagnostics!.mandatorySamePositionCompleted).toBe(false)
+    expect(zero.diagnostics!.optionalLocalCompleted).toBe(false)
+
+    const { players, automatic } = heckeHolgerFixture()
+    const auto = evaluateCandidate(players, automatic, "auto")!
+    const completed = runMandatorySamePositionLocalSearch(players, auto)
+    expect(completed.candidatesEvaluated).toBe(completed.requiredCandidates)
+    expect(completed.completed).toBe(true)
+  })
+
   it("bricht ab, wenn kaum eindeutige Kandidaten erzeugt werden können", () => {
     const players = Array.from({ length: 6 }, (_, index) => player(index + 1, `F${index + 1}`, { forward: 1000 }, ["forward"]))
 
@@ -273,6 +307,38 @@ describe("same-position local search regression", () => {
     expect(compareEvaluatedCandidates(b, a)).toBeLessThan(0)
     const local = runMandatorySamePositionLocalSearch(players, a)
     expect(local.best.hash).toBe(a.hash)
+  })
+
+
+
+  it("evaluates exact same-position swap candidates without repairing unrelated players", () => {
+    const { players, automatic } = heckeHolgerFixture()
+    const auto = evaluateCandidate(players, automatic, "auto")!
+    const local = runMandatorySamePositionLocalSearch(players, auto, { safetyPassLimit: 1 })
+    const changed = auto.candidate.filter((before) => {
+      const after = local.best.candidate.find((gene) => gene.signupId === before.signupId)!
+      return after.team !== before.team || after.position !== before.position
+    })
+    expect(changed).toHaveLength(2)
+    expect(changed[0].position).toBe(changed[1].position)
+
+    const exactSwap = auto.candidate.map((gene) => ({ ...gene }))
+    const left = exactSwap.find((gene) => gene.signupId === changed[0].signupId)!
+    const right = exactSwap.find((gene) => gene.signupId === changed[1].signupId)!
+    ;[left.team, right.team] = [right.team, left.team]
+    const exact = evaluateCandidate(players, exactSwap, "exact")!
+
+    expect(countSamePositionSwapPairs(auto.candidate)).toBeGreaterThan(0)
+    expect(local.best.candidate).toEqual(exact.candidate)
+    for (const before of auto.candidate) {
+      const after = local.best.candidate.find((gene) => gene.signupId === before.signupId)!
+      if (changed.some((gene) => gene.signupId === before.signupId)) {
+        expect(after.position).toBe(before.position)
+        expect(after.team === before.team).toBe(false)
+      } else {
+        expect(after).toEqual(before)
+      }
+    }
   })
 
   it("finds the Hecke/Holger same-position improvement from the automatic arrangement", () => {
