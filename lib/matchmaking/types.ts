@@ -64,4 +64,22 @@ export type TeamSummary = {
   confidence: number
 }
 export type MatchmakingQuality = "high" | "medium" | "low"
-export type MatchmakingResult = { assignments: MatchmakingAssignment[]; rotationGroups: RotationGroup[]; team1: TeamSummary; team2: TeamSummary; warnings: string[]; computationTimeMs: number; candidatesEvaluated: number; optimality: "exact" | "best-found"; quality: MatchmakingQuality }
+export type MatchmakingDiagnostics = {
+  effectiveStrengthDifference: number
+  startingLineupDifference: number
+  positionStrengthDifference: number
+  targetLineupPenalty: number
+  geneticCandidates: number
+  mandatorySamePositionCandidates: number
+  mandatorySamePositionFirstSweepRequiredCandidates: number
+  mandatorySamePositionRequiredCandidates: number
+  mandatorySamePositionCompleted: boolean
+  mandatorySamePositionAttempted: boolean
+  mandatorySamePositionSweepsStarted: number
+  mandatorySamePositionSweepsCompleted: number
+  optionalLocalCandidates: number
+  optionalLocalCompleted: boolean
+  optionalLocalAttempted: boolean
+  totalCandidates: number
+}
+export type MatchmakingResult = { assignments: MatchmakingAssignment[]; rotationGroups: RotationGroup[]; team1: TeamSummary; team2: TeamSummary; warnings: string[]; computationTimeMs: number; candidatesEvaluated: number; optimality: "exact" | "best-found"; quality: MatchmakingQuality; diagnostics?: MatchmakingDiagnostics }

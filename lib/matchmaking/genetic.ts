@@ -71,10 +71,51 @@ export function runGeneticOptimization(input: MatchmakingPlayer[], options: Gene
     )
     population = next
   }
-  best = localImprove(players, best, evalOne)
+  const geneticEvaluated = evaluated
+  let mandatoryEvaluated = 0
+  let optionalEvaluated = 0
+  const canEvaluate = () => evaluated < options.maxCandidates && (options.maxComputationTimeMs <= 0 || Date.now() - started <= options.maxComputationTimeMs)
+  const firstSweepRequiredCandidates = countSamePositionSwapPairs(best.candidate)
+  let mandatory: SamePositionLocalSearchResult = {
+    best,
+    candidatesEvaluated: 0,
+    firstSweepRequiredCandidates,
+    requiredCandidates: firstSweepRequiredCandidates,
+    completed: firstSweepRequiredCandidates === 0,
+    attempted: false,
+    sweepsStarted: 0,
+    sweepsCompleted: 0,
+  }
+  if (options.maxCandidates > 0) {
+    const evalMandatory: EvalFn = (raw) => {
+      if (!canEvaluate()) return null
+      const ev = evaluateCandidate(players, raw, candidateHash(raw))
+      if (ev) { mandatoryEvaluated++; evaluated++ }
+      return ev
+    }
+    mandatory = runMandatorySamePositionLocalSearch(players, best, 30, evalMandatory)
+    best = mandatory.best
+  }
+
+  const localCandidateBudget = Math.max(0, options.maxCandidates - evaluated)
+  let optional: OptionalLocalSearchResult = { best, completed: false, attempted: false }
+  if (options.maxCandidates > 0 && localCandidateBudget > 0 && canEvaluate()) {
+    const evalOptional: EvalFn = (raw) => {
+      if (optionalEvaluated >= localCandidateBudget || !canEvaluate()) return null
+      const ev = evaluateCandidate(players, raw, candidateHash(raw))
+      if (ev) { optionalEvaluated++; evaluated++ }
+      return ev
+    }
+    optional = optionalLocalImprove(players, best, evalOptional)
+    best = optional.best
+  }
+
+  if (!mandatory.completed && (mandatory.attempted || options.maxCandidates > 0)) warnings.push("Die verpflichtende gleiche-Position-Wechselsuche konnte nicht vollständig abgeschlossen werden.")
+  if (!optional.completed && optional.attempted) warnings.push("Die optionale lokale Suche konnte nicht vollständig abgeschlossen werden.")
   if (compareBreakdowns(best.fitness, greedy.fitness, best.hash, greedy.hash) > 0) best = greedy
   warnings.push(...best.warnings)
-  return { assignments: best.assignments, rotationGroups: best.rotationGroups, team1: best.team1, team2: best.team2, warnings: [], computationTimeMs: Date.now() - started, candidatesEvaluated: evaluated, optimality: "best-found", quality: "medium" }
+  const totalCandidates = geneticEvaluated + mandatoryEvaluated + optionalEvaluated
+  return { assignments: best.assignments, rotationGroups: best.rotationGroups, team1: best.team1, team2: best.team2, warnings: [], computationTimeMs: Date.now() - started, candidatesEvaluated: totalCandidates, optimality: "best-found", quality: "medium", diagnostics: { effectiveStrengthDifference: best.fitness.effectiveStrengthDifference, startingLineupDifference: best.fitness.startingLineupDifference, positionStrengthDifference: best.fitness.positionStrengthDifference, targetLineupPenalty: best.fitness.targetLineupPenalty, geneticCandidates: geneticEvaluated, mandatorySamePositionCandidates: mandatoryEvaluated, mandatorySamePositionFirstSweepRequiredCandidates: mandatory.firstSweepRequiredCandidates, mandatorySamePositionRequiredCandidates: mandatory.requiredCandidates, mandatorySamePositionCompleted: mandatory.completed, mandatorySamePositionAttempted: mandatory.attempted, mandatorySamePositionSweepsStarted: mandatory.sweepsStarted, mandatorySamePositionSweepsCompleted: mandatory.sweepsCompleted, optionalLocalCandidates: optionalEvaluated, optionalLocalCompleted: optional.completed, optionalLocalAttempted: optional.attempted, totalCandidates } }
 }
 
 function fillPopulation(
@@ -159,16 +200,103 @@ function mutate(players: MatchmakingPlayer[], candidate: Candidate, prng: Random
   else { const pos = prng.pick(PLAYER_POSITIONS); const a = out.find((g) => g.team === 1 && g.position === pos), b = out.find((g) => g.team === 2 && g.position === pos); if (a && b) [a.team, b.team] = [b.team, a.team] }
   return out
 }
-function localImprove(players: MatchmakingPlayer[], start: EvaluatedCandidate, evalOne: EvalFn): EvaluatedCandidate {
+export function countSamePositionSwapPairs(candidate: Candidate): number {
+  return PLAYER_POSITIONS.reduce((sum, position) => {
+    const team1 = candidate.filter((gene) => gene.team === 1 && gene.position === position).length
+    const team2 = candidate.filter((gene) => gene.team === 2 && gene.position === position).length
+    return sum + team1 * team2
+  }, 0)
+}
+
+export type SamePositionLocalSearchResult = {
+  best: EvaluatedCandidate
+  candidatesEvaluated: number
+  firstSweepRequiredCandidates: number
+  requiredCandidates: number
+  completed: boolean
+  attempted: boolean
+  sweepsStarted: number
+  sweepsCompleted: number
+}
+
+type OptionalLocalSearchResult = { best: EvaluatedCandidate; completed: boolean; attempted: boolean }
+
+export function runMandatorySamePositionLocalSearch(players: MatchmakingPlayer[], start: EvaluatedCandidate, safetyPassLimit = 30, evalOne?: EvalFn): SamePositionLocalSearchResult {
   let best = start
-  for (let i = 0; i < best.candidate.length; i++) for (let j = i + 1; j < best.candidate.length; j++) {
-    const swapped = best.candidate.map((g) => ({ ...g })); [swapped[i].team, swapped[j].team] = [swapped[j].team, swapped[i].team]
-    const ev = evalOne(swapped); if (ev && compareBreakdowns(ev.fitness, best.fitness, ev.hash, best.hash) < 0) best = ev
+  let candidatesEvaluated = 0
+  let requiredCandidates = 0
+  let sweepsStarted = 0
+  let sweepsCompleted = 0
+  const firstSweepRequiredCandidates = countSamePositionSwapPairs(best.candidate)
+  const evaluate = evalOne ?? ((raw: Candidate) => evaluateCandidate(players, raw, candidateHash(raw)))
+
+  if (firstSweepRequiredCandidates === 0) return { best, candidatesEvaluated, firstSweepRequiredCandidates, requiredCandidates, completed: true, attempted: false, sweepsStarted, sweepsCompleted }
+
+  for (let pass = 0; pass < safetyPassLimit; pass++) {
+    const sweepRequired = countSamePositionSwapPairs(best.candidate)
+    if (sweepRequired === 0) return { best, candidatesEvaluated, firstSweepRequiredCandidates, requiredCandidates, completed: true, attempted: candidatesEvaluated > 0, sweepsStarted, sweepsCompleted }
+    requiredCandidates += sweepRequired
+    sweepsStarted++
+    let sweepEvaluated = 0
+    let bestImprovement: EvaluatedCandidate | null = null
+    for (let i = 0; i < best.candidate.length; i++) for (let j = i + 1; j < best.candidate.length; j++) {
+      const left = best.candidate[i], right = best.candidate[j]
+      if (left.team === right.team || left.position !== right.position) continue
+      const swapped = best.candidate.map((g) => ({ ...g })); [swapped[i].team, swapped[j].team] = [swapped[j].team, swapped[i].team]
+      const ev = evaluate(swapped)
+      if (!ev) {
+        if (bestImprovement) best = bestImprovement
+        return { best, candidatesEvaluated, firstSweepRequiredCandidates, requiredCandidates, completed: false, attempted: candidatesEvaluated > 0, sweepsStarted, sweepsCompleted }
+      }
+      candidatesEvaluated++
+      sweepEvaluated++
+      if (compareBreakdowns(ev.fitness, best.fitness, ev.hash, best.hash) < 0 && (!bestImprovement || compareBreakdowns(ev.fitness, bestImprovement.fitness, ev.hash, bestImprovement.hash) < 0)) bestImprovement = ev
+    }
+    if (sweepEvaluated !== sweepRequired) {
+      if (bestImprovement) best = bestImprovement
+      return { best, candidatesEvaluated, firstSweepRequiredCandidates, requiredCandidates, completed: false, attempted: candidatesEvaluated > 0, sweepsStarted, sweepsCompleted }
+    }
+    sweepsCompleted++
+    if (!bestImprovement) return { best, candidatesEvaluated, firstSweepRequiredCandidates, requiredCandidates, completed: true, attempted: true, sweepsStarted, sweepsCompleted }
+    best = bestImprovement
   }
+  return { best, candidatesEvaluated, firstSweepRequiredCandidates, requiredCandidates, completed: false, attempted: candidatesEvaluated > 0, sweepsStarted, sweepsCompleted }
+}
+
+function optionalLocalImprove(players: MatchmakingPlayer[], start: EvaluatedCandidate, evalOne: EvalFn): OptionalLocalSearchResult {
+  let best = start
+  let attempted = false
+  let completed = true
+  let halted = false
   const byId = new Map(players.map((p) => [p.signupId, p]))
-  for (let i = 0; i < best.candidate.length; i++) for (const pos of byId.get(best.candidate[i].signupId)!.eligiblePositions) {
-    const changed = best.candidate.map((g) => ({ ...g })); changed[i].position = pos
-    const ev = evalOne(changed); if (ev && compareBreakdowns(ev.fitness, best.fitness, ev.hash, best.hash) < 0) best = ev
+  const tryCandidate = (candidate: Candidate): boolean => {
+    attempted = true
+    const ev = evalOne(candidate)
+    if (!ev) { completed = false; halted = true; return false }
+    if (compareBreakdowns(ev.fitness, best.fitness, ev.hash, best.hash) < 0) { best = ev; return true }
+    return false
   }
-  return best
+  const passAnySwap = () => {
+    for (let i = 0; i < best.candidate.length; i++) for (let j = i + 1; j < best.candidate.length; j++) {
+      if (best.candidate[i].team === best.candidate[j].team) continue
+      const swapped = best.candidate.map((g) => ({ ...g })); [swapped[i].team, swapped[j].team] = [swapped[j].team, swapped[i].team]
+      if (tryCandidate(swapped) || halted) return !halted
+    }
+    return false
+  }
+  const passPositionChange = () => {
+    for (let i = 0; i < best.candidate.length; i++) for (const pos of byId.get(best.candidate[i].signupId)!.eligiblePositions) {
+      if (pos === best.candidate[i].position) continue
+      const changed = best.candidate.map((g) => ({ ...g })); changed[i].position = pos
+      if (tryCandidate(changed) || halted) return !halted
+    }
+    return false
+  }
+  while (!halted) {
+    if (passAnySwap()) continue
+    if (halted) break
+    if (passPositionChange()) continue
+    break
+  }
+  return { best, completed, attempted }
 }
