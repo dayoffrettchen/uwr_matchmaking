@@ -119,7 +119,8 @@ export function normalizeMatchmakingPlayers(input: MatchmakingPlayer[], warnings
 }
 
 export function balanceMatchmakingPlayers(input: MatchmakingPlayer[], options: Partial<GeneticOptions> = {}): MatchmakingResult {
-  const started = Date.now()
+  const now = options.now ?? Date.now
+  const started = now()
   const warnings: string[] = []
   if (input.length < 6) warnings.push("Weniger als sechs Spieler sind angemeldet. Die Aufteilung ist nur eingeschränkt aussagekräftig.")
   if (input.length % 2 === 1) warnings.push("Ungerade Teilnehmerzahl: Ein Spieler wird als Wechselspieler eingeplant.")
@@ -137,6 +138,7 @@ export function balanceMatchmakingPlayers(input: MatchmakingPlayer[], options: P
     maxGenerations: options.maxGenerations ?? 80,
     maxComputationTimeMs: options.maxComputationTimeMs ?? MAX_COMPUTATION_TIME_MS,
     populationSize: options.populationSize ?? 48,
+    now,
   }, warnings)
   for (const team of [1, 2] as const) if (result.assignments.filter((a) => a.team === team && a.startsInWater).length > MAX_ACTIVE_PLAYERS_PER_TEAM) warnings.push("Mehr als sechs Spieler wurden als aktiv eingeplant.")
   for (const group of result.rotationGroups.filter((g) => g.type === "triple" && g.ratingSpread > 200)) warnings.push(`Die Dreier-Wechselgruppe ${group.members.map((m) => m.name).join("/")} besitzt eine stark schwankende aktive Paarstärke. Die Elo-Spannweite dieser Wechselgruppe beträgt ${group.ratingSpread} Punkte.`)
@@ -145,7 +147,7 @@ export function balanceMatchmakingPlayers(input: MatchmakingPlayer[], options: P
   const unstable = result.assignments.filter((a) => getRatingStatus(bySignup.get(a.signupId)!.gamesPlayed[a.position]) !== "established").length
   const uniqueWarnings = [...new Set(warnings)]
   const quality = uniqueWarnings.length || diff > 80 ? "low" : diff > 25 || unstable > result.assignments.length / 3 ? "medium" : "high"
-  return { ...result, warnings: uniqueWarnings, computationTimeMs: Date.now() - started, optimality: "best-found", quality }
+  return { ...result, warnings: uniqueWarnings, computationTimeMs: now() - started, optimality: "best-found", quality }
 }
 
 async function loadMatchmakingPlayers(trainingId: number) {

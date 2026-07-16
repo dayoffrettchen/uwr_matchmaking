@@ -54,3 +54,31 @@ describe("persisted-lineup-strength", () => {
     expect(missingStart.teams[1].diagnostics.map((d) => d.code)).toContain("MISSING_START_STATE")
   })
 })
+
+  it("marks invalid team rows globally incomplete instead of omitting them", () => {
+    const summary = summarizePersistedLineupStrength([
+      row(1, 1, "defender", 1, 1000, true),
+      row(2, 2, "defender", 1, 1000, true),
+      { signupId: 3, team: null, position: "forward", rotationGroupId: 2, assignedRating: 1000, startsInWater: true, rotationOrder: 1 },
+      { signupId: 4, team: 0, position: "forward", rotationGroupId: 2, assignedRating: 1000, startsInWater: true, rotationOrder: 1 },
+      { signupId: 5, team: 3, position: "forward", rotationGroupId: 2, assignedRating: 1000, startsInWater: true, rotationOrder: 1 },
+    ])
+    expect(summary.strengthDifference).toBe(null)
+    expect(summary.teams[1].complete).toBe(false)
+    expect(summary.teams[2].complete).toBe(false)
+    expect(summary.teams[1].effectiveStrength).toBe(null)
+    expect(summary.teams[2].effectiveStrength).toBe(null)
+    expect(summary.teams[1].diagnostics.filter((d) => d.code === "INVALID_TEAM")).toHaveLength(3)
+  })
+
+  it("marks mixed-position rotation groups incomplete per team while allowing id reuse", () => {
+    const summary = summarizePersistedLineupStrength([
+      row(1, 1, "defender", 1, 1000, true),
+      row(2, 1, "forward", 1, 990, false, 2),
+      row(3, 2, "defender", 1, 1000, true),
+    ])
+    expect(summary.teams[1].complete).toBe(false)
+    expect(summary.teams[1].effectiveStrength).toBe(null)
+    expect(summary.teams[1].diagnostics.some((d) => d.code === "MIXED_POSITION_GROUP" && d.team === 1 && d.rotationGroupId === 1 && d.positions.join(",") === "defender,forward")).toBe(true)
+    expect(summary.teams[2].diagnostics.some((d) => d.code === "MIXED_POSITION_GROUP")).toBe(false)
+  })

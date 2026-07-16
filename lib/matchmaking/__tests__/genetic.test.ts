@@ -213,6 +213,63 @@ describe("genetisches Matchmaking", () => {
     expect(result.assignments.some((assignment) => assignment.team === 2)).toBe(true)
   })
 
+
+  it("reports coherent phase accounting for thirty flexible players", () => {
+    const players = Array.from({ length: 30 }, (_, index) => player(index + 1, `P${index + 1}`, { goalkeeper: 1000 + index, defender: 1010 + index, forward: 1020 + index }))
+    const result = balanceMatchmakingPlayers(players, { seed: 17, maxCandidates: 500, maxGenerations: 80, maxComputationTimeMs: 0, populationSize: 48 })
+    const d = result.diagnostics!
+    expect(result.candidatesEvaluated).toBeLessThanOrEqual(500)
+    expect(d.geneticCandidates).toBeGreaterThan(1)
+    expect(d.mandatorySamePositionRequiredCandidates).toBeLessThanOrEqual(225)
+    expect(d.geneticCandidates + d.mandatorySamePositionCandidates + d.optionalLocalCandidates).toBe(d.totalCandidates)
+    expect(d.totalCandidates).toBe(result.candidatesEvaluated)
+  })
+
+  it("reports coherent accounting for thirty single-position players", () => {
+    const players = Array.from({ length: 30 }, (_, index) => {
+      const position = PLAYER_POSITIONS[index % PLAYER_POSITIONS.length]
+      return player(index + 1, `S${index + 1}`, { [position]: 1000 + index }, [position])
+    })
+    const result = balanceMatchmakingPlayers(players, { seed: 23, maxCandidates: 500, maxGenerations: 80, maxComputationTimeMs: 0, populationSize: 48 })
+    const d = result.diagnostics!
+    expect(d.mandatorySamePositionRequiredCandidates).toBeLessThanOrEqual(225)
+    expect(d.totalCandidates).toBeLessThanOrEqual(500)
+    expect(d.geneticCandidates + d.mandatorySamePositionCandidates + d.optionalLocalCandidates).toBe(d.totalCandidates)
+    expect(d.totalCandidates).toBe(result.candidatesEvaluated)
+  })
+
+  it("reports a partial mandatory sweep honestly under a tiny budget", () => {
+    const result = balanceMatchmakingPlayers(fairnessFixture(), { seed: 9, maxCandidates: 20, maxGenerations: 100, maxComputationTimeMs: 0, populationSize: 16 })
+    const d = result.diagnostics!
+    expect(d.totalCandidates).toBeLessThanOrEqual(20)
+    expect(d.mandatorySamePositionCompleted).toBe(false)
+    expect(result.warnings.some((warning) => warning.includes("verpflichtende gleiche-Position-Wechselsuche"))).toBe(true)
+  })
+
+  it("keeps the documented zero-budget greedy exception", () => {
+    const result = balanceMatchmakingPlayers(fairnessFixture(), { seed: 9, maxCandidates: 0, maxGenerations: 0, maxComputationTimeMs: 0, populationSize: 0 })
+    const d = result.diagnostics!
+    expect(result.candidatesEvaluated).toBe(1)
+    expect(d.totalCandidates).toBe(1)
+    expect(d.geneticCandidates).toBe(1)
+    expect(d.mandatorySamePositionCandidates).toBe(0)
+    expect(d.optionalLocalCandidates).toBe(0)
+  })
+
+  it("passes the injected clock into the optimizer and uses one deadline", () => {
+    const trace: number[] = []
+    let tick = 0
+    const now = () => { trace.push(tick); return tick++ * 10 }
+    const result = balanceMatchmakingPlayers(fairnessFixture(), { seed: 42, maxCandidates: 300, maxGenerations: 100, maxComputationTimeMs: 100, populationSize: 48, now })
+    const d = result.diagnostics!
+    expect(result.computationTimeMs).toBeGreaterThan(0)
+    expect(Math.max(...trace)).toBeGreaterThanOrEqual(10)
+    expect(d.geneticCandidates).toBeGreaterThan(1)
+    expect(d.geneticCandidates).toBeLessThan(300)
+    expect(d.totalCandidates).toBe(result.candidatesEvaluated)
+    expect(result.warnings.some((warning) => warning.includes("Suche konnte nicht vollständig abgeschlossen"))).toBe(true)
+  })
+
   it("bricht ab, wenn kaum eindeutige Kandidaten erzeugt werden können", () => {
     const players = Array.from({ length: 6 }, (_, index) => player(index + 1, `F${index + 1}`, { forward: 1000 }, ["forward"]))
 
@@ -293,7 +350,15 @@ describe("same-position local search regression", () => {
     const local = runMandatorySamePositionLocalSearch(players, auto)
     expect(local.completed).toBe(true)
     expect(local.candidatesEvaluated).toBeGreaterThan(0)
+    expect(local.requiredCandidates).toBeGreaterThan(0)
+    expect(local.candidatesEvaluated).toBeGreaterThan(0)
     expect(compareFitnessQuality(local.best.fitness, manual.fitness)).toBeLessThanOrEqual(0)
+    const optimized = balanceMatchmakingPlayers(players, { seed: 1, maxCandidates: 500, maxGenerations: 20, maxComputationTimeMs: 0, populationSize: 24 })
+    const d = optimized.diagnostics!
+    expect(d.geneticCandidates + d.mandatorySamePositionCandidates + d.optionalLocalCandidates).toBe(d.totalCandidates)
+    expect(d.totalCandidates).toBe(optimized.candidatesEvaluated)
+    expect(d.totalCandidates).toBeLessThanOrEqual(500)
+    expect(d.mandatorySamePositionRequiredCandidates).toBeGreaterThan(0)
     expectNoImprovingSamePositionSwap(players, local.best)
   })
 })

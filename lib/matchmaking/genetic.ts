@@ -6,103 +6,123 @@ import { repairCandidate } from "./repair"
 import { compareEvaluatedCandidates, compareFitnessQuality, evaluateCandidate, type EvaluatedCandidate } from "./fitness"
 import type { MatchmakingPlayer, MatchmakingResult } from "./types"
 
-export type GeneticOptions = { seed?: number; maxCandidates: number; maxGenerations: number; maxComputationTimeMs: number; populationSize: number }
+export type GeneticOptions = { seed?: number; maxCandidates: number; maxGenerations: number; maxComputationTimeMs: number; populationSize: number; now?: () => number }
 
 type EvalFn = (candidate: Candidate) => EvaluatedCandidate | null
 
 export function runGeneticOptimization(input: MatchmakingPlayer[], options: GeneticOptions, warnings: string[]): MatchmakingResult {
-  const started = Date.now()
+  const now = options.now ?? Date.now
+  const started = now()
+  const globalDeadline = options.maxComputationTimeMs > 0 ? started + options.maxComputationTimeMs : null
+  const geneticDeadline = globalDeadline === null ? null : started + Math.floor(options.maxComputationTimeMs * 0.7)
   const players = canonicalizePlayers(input)
   const prng = createPrng(options.seed ?? stableInputSeed(players))
+  const maxCandidates = Math.max(0, options.maxCandidates)
   const mandatorySamePositionReserve = estimateSamePositionSwapPairs(players)
-  const requestedLocalCandidateBudget = Math.max(64, Math.ceil(options.maxCandidates * 0.25))
-  const localCandidateBudget = Math.max(0, Math.min(requestedLocalCandidateBudget, options.maxCandidates - 1 - mandatorySamePositionReserve))
-  const geneticCandidateBudget = Math.max(1, options.maxCandidates - localCandidateBudget - mandatorySamePositionReserve)
-  const localTimeBudgetMs = options.maxComputationTimeMs > 0 ? Math.max(25, Math.ceil(options.maxComputationTimeMs * 0.25)) : 0
-  const geneticTimeBudgetMs = options.maxComputationTimeMs > 0 ? Math.max(1, options.maxComputationTimeMs - localTimeBudgetMs) : 0
-  let evaluated = 0
+  const requestedLocalCandidateBudget = Math.max(64, Math.ceil(maxCandidates * 0.25))
+  const localCandidateBudget = maxCandidates > 0 ? Math.max(0, Math.min(requestedLocalCandidateBudget, maxCandidates - 1 - mandatorySamePositionReserve)) : 0
+  const geneticCandidateBudget = maxCandidates > 0 ? Math.max(1, maxCandidates - localCandidateBudget - mandatorySamePositionReserve) : 1
+  let geneticEvaluated = 0
+  let mandatoryEvaluated = 0
+  let optionalEvaluated = 0
   const seen = new Set<string>()
-  const evalOne: EvalFn = (raw) => {
-    if (evaluated >= geneticCandidateBudget) return null
-    if (geneticTimeBudgetMs > 0 && Date.now() - started > geneticTimeBudgetMs) return null
+  const canEvaluate = (phaseDeadline: number | null = globalDeadline) => {
+    if (maxCandidates > 0 && geneticEvaluated + mandatoryEvaluated + optionalEvaluated >= maxCandidates) return false
+    if (phaseDeadline !== null && now() >= phaseDeadline) return false
+    return true
+  }
+  const evalGenetic: EvalFn = (raw) => {
+    if (geneticEvaluated >= geneticCandidateBudget || !canEvaluate(geneticDeadline)) return null
     const candidate = repairCandidate(players, raw)
     if (!candidate) return null
     const hash = candidateHash(candidate)
     const result = evaluateCandidate(players, candidate, hash)
-    if (result) { evaluated++; seen.add(hash) }
+    if (result) { geneticEvaluated++; seen.add(hash) }
     return result
   }
   const greedySeed = fromDraftAssignments(players, buildGreedySeed(players))
   const greedyCandidate = repairCandidate(players, greedySeed) ?? greedySeed
   const greedy = evaluateCandidate(players, greedyCandidate, "greedy")
   if (!greedy) throw new Error("Für diese Teilnehmer konnte keine gültige Team-Einteilung erstellt werden.")
-  evaluated = Math.max(evaluated, 1)
+  geneticEvaluated = 1
   seen.add(greedy.hash)
   let best = greedy
-  const pushEval = (arr: EvaluatedCandidate[], c: Candidate) => {
-    const fixed = repairCandidate(players, c)
-    if (!fixed) return
-    const hash = candidateHash(fixed)
-    if (seen.has(hash) && arr.some((e) => e.hash === hash)) return
-    const ev = evalOne(fixed)
-    if (!ev) return
-    arr.push(ev)
-    if (compareEvaluatedCandidates(ev, best) < 0) best = ev
-  }
-  let population: EvaluatedCandidate[] = [greedy]
-  pushEval(population, fromDraftAssignments(players, buildGreedySeed(players, { reverseTeamPriority: true })))
-  pushEval(population, snake(players))
-  for (const pos of PLAYER_POSITIONS) pushEval(population, byPosition(players, pos))
-  for (const candidate of enumerateSmallRosterCandidates(players)) pushEval(population, candidate)
-  fillPopulation(population, options.populationSize, () => randomCandidate(players, prng), pushEval, () => evaluated, geneticCandidateBudget, started, geneticTimeBudgetMs)
-  for (let i = 0; i < Math.min(12, options.populationSize); i++) pushEval(population, mutate(players, greedy.candidate, prng, best))
 
-  for (let gen = 0; gen < options.maxGenerations && evaluated < geneticCandidateBudget; gen++) {
-    population.sort(compareEvaluatedCandidates)
-    const next = [greedy, best, ...population.slice(0, 4)].filter((v, i, a) => a.findIndex((x) => x.hash === v.hash) === i)
-    fillPopulation(
-      next,
-      options.populationSize,
-      () => {
+  if (maxCandidates > 0) {
+    const pushEval = (arr: EvaluatedCandidate[], c: Candidate) => {
+      const fixed = repairCandidate(players, c)
+      if (!fixed) return
+      const hash = candidateHash(fixed)
+      if (seen.has(hash) && arr.some((e) => e.hash === hash)) return
+      const ev = evalGenetic(fixed)
+      if (!ev) return
+      arr.push(ev)
+      if (compareEvaluatedCandidates(ev, best) < 0) best = ev
+    }
+    let population: EvaluatedCandidate[] = [greedy]
+    pushEval(population, fromDraftAssignments(players, buildGreedySeed(players, { reverseTeamPriority: true })))
+    pushEval(population, snake(players))
+    for (const pos of PLAYER_POSITIONS) pushEval(population, byPosition(players, pos))
+    for (const candidate of enumerateSmallRosterCandidates(players)) pushEval(population, candidate)
+    fillPopulation(population, options.populationSize, () => randomCandidate(players, prng), pushEval, () => geneticEvaluated, geneticCandidateBudget, now, geneticDeadline)
+    for (let i = 0; i < Math.min(12, options.populationSize); i++) pushEval(population, mutate(players, greedy.candidate, prng, best))
+
+    for (let gen = 0; gen < options.maxGenerations && geneticEvaluated < geneticCandidateBudget && canEvaluate(geneticDeadline); gen++) {
+      population.sort(compareEvaluatedCandidates)
+      const next = [greedy, best, ...population.slice(0, 4)].filter((v, i, a) => a.findIndex((x) => x.hash === v.hash) === i)
+      fillPopulation(next, options.populationSize, () => {
         const a = tournament(population, prng), b = tournament(population, prng)
         let child = crossover(a.candidate, b.candidate, prng)
         if (prng.chance(0.85)) child = mutate(players, child, prng, best)
         return child
-      },
-      pushEval,
-      () => evaluated,
-      geneticCandidateBudget,
-      started,
-      geneticTimeBudgetMs,
-    )
-    population = next
+      }, pushEval, () => geneticEvaluated, geneticCandidateBudget, now, geneticDeadline)
+      population = next
+    }
   }
-  const mandatory = runMandatorySamePositionLocalSearch(players, best)
-  best = mandatory.best
-  let localEvaluated = 0
-  const localStarted = Date.now()
-  let localCompleted = true
-  const evalLocal: EvalFn = (raw) => {
-    if (localEvaluated >= localCandidateBudget) { localCompleted = false; return null }
-    if (localTimeBudgetMs > 0 && Date.now() - localStarted > localTimeBudgetMs) { localCompleted = false; return null }
-    const candidate = repairCandidate(players, raw)
-    if (!candidate) return null
-    const result = evaluateCandidate(players, candidate, candidateHash(candidate))
-    if (result) localEvaluated++
-    return result
+
+  let mandatory = { best, candidatesEvaluated: 0, completed: true, requiredCandidates: countSamePositionSwapPairs(best.candidate) }
+  if (maxCandidates > 0) {
+    const evalMandatory: EvalFn = (raw) => {
+      if (!canEvaluate(globalDeadline)) return null
+      const fixed = repairCandidate(players, raw)
+      if (!fixed) return null
+      const ev = evaluateCandidate(players, fixed, candidateHash(fixed))
+      if (ev) mandatoryEvaluated++
+      return ev
+    }
+    mandatory = runMandatorySamePositionLocalSearch(players, best, 30, evalMandatory)
+    mandatoryEvaluated = mandatory.candidatesEvaluated
+    best = mandatory.best
   }
-  best = optionalLocalImprove(players, best, evalLocal)
+
+  let optionalCompleted = true
+  if (maxCandidates > 0) {
+    const evalOptional: EvalFn = (raw) => {
+      if (optionalEvaluated >= localCandidateBudget || !canEvaluate(globalDeadline)) { optionalCompleted = false; return null }
+      const candidate = repairCandidate(players, raw)
+      if (!candidate) return null
+      const result = evaluateCandidate(players, candidate, candidateHash(candidate))
+      if (result) optionalEvaluated++
+      return result
+    }
+    best = optionalLocalImprove(players, best, evalOptional)
+  }
   if (!mandatory.completed) warnings.push("Die verpflichtende gleiche-Position-Wechselsuche konnte nicht vollständig abgeschlossen werden.")
+  if (!optionalCompleted) warnings.push("Die optionale lokale Suche konnte nicht vollständig abgeschlossen werden.")
   if (compareEvaluatedCandidates(best, greedy) > 0) best = greedy
   warnings.push(...best.warnings)
-  return { assignments: best.assignments, rotationGroups: best.rotationGroups, team1: best.team1, team2: best.team2, warnings: [], computationTimeMs: Date.now() - started, candidatesEvaluated: options.maxCandidates <= 0 ? 1 : Math.min(options.maxCandidates, evaluated + mandatory.candidatesEvaluated + localEvaluated), optimality: "best-found", quality: "medium", diagnostics: { effectiveStrengthDifference: best.fitness.effectiveStrengthDifference, startingLineupDifference: best.fitness.startingLineupDifference, positionStrengthDifference: best.fitness.positionStrengthDifference, targetLineupPenalty: best.fitness.targetLineupPenalty, mandatorySamePositionCandidates: mandatory.candidatesEvaluated, mandatorySamePositionCompleted: mandatory.completed, optionalLocalCandidates: localEvaluated, optionalLocalCompleted: localCompleted } }
+  const totalCandidates = geneticEvaluated + mandatoryEvaluated + optionalEvaluated
+  return { assignments: best.assignments, rotationGroups: best.rotationGroups, team1: best.team1, team2: best.team2, warnings, computationTimeMs: now() - started, candidatesEvaluated: totalCandidates, optimality: "best-found", quality: "medium", diagnostics: { effectiveStrengthDifference: best.fitness.effectiveStrengthDifference, startingLineupDifference: best.fitness.startingLineupDifference, positionStrengthDifference: best.fitness.positionStrengthDifference, targetLineupPenalty: best.fitness.targetLineupPenalty, geneticCandidates: geneticEvaluated, mandatorySamePositionCandidates: mandatoryEvaluated, mandatorySamePositionRequiredCandidates: mandatory.requiredCandidates, mandatorySamePositionCompleted: mandatory.completed, optionalLocalCandidates: optionalEvaluated, optionalLocalCompleted: optionalCompleted, totalCandidates } }
 }
 
 function estimateSamePositionSwapPairs(players: MatchmakingPlayer[]): number {
+  return Math.floor(players.length * players.length / 4)
+}
+
+function countSamePositionSwapPairs(candidate: Candidate): number {
   return PLAYER_POSITIONS.reduce((sum, position) => {
-    const count = players.filter((player) => player.eligiblePositions.includes(position)).length
-    const team1 = Math.ceil(count / 2)
-    const team2 = Math.floor(count / 2)
+    const team1 = candidate.filter((gene) => gene.team === 1 && gene.position === position).length
+    const team2 = candidate.filter((gene) => gene.team === 2 && gene.position === position).length
     return sum + team1 * team2
   }, 0)
 }
@@ -114,14 +134,14 @@ function fillPopulation(
   pushEval: (arr: EvaluatedCandidate[], c: Candidate) => void,
   getEvaluated: () => number,
   maxCandidates: number,
-  started: number,
-  maxComputationTimeMs: number,
+  now: () => number,
+  deadline: number | null,
 ) {
   let attemptsWithoutGrowth = 0
   const maxAttemptsWithoutGrowth = Math.max(targetSize * 20, 100)
 
   while (population.length < targetSize && getEvaluated() < maxCandidates && attemptsWithoutGrowth < maxAttemptsWithoutGrowth) {
-    if (maxComputationTimeMs > 0 && Date.now() - started > maxComputationTimeMs) break
+    if (deadline !== null && now() >= deadline) break
 
     const beforeLength = population.length
     const beforeEvaluated = getEvaluated()
@@ -189,30 +209,43 @@ function mutate(players: MatchmakingPlayer[], candidate: Candidate, prng: Random
   else { const pos = prng.pick(PLAYER_POSITIONS); const a = out.find((g) => g.team === 1 && g.position === pos), b = out.find((g) => g.team === 2 && g.position === pos); if (a && b) [a.team, b.team] = [b.team, a.team] }
   return out
 }
-export type SamePositionLocalSearchResult = { best: EvaluatedCandidate; candidatesEvaluated: number; completed: boolean }
+export type SamePositionLocalSearchResult = { best: EvaluatedCandidate; candidatesEvaluated: number; completed: boolean; requiredCandidates: number }
 
-export function runMandatorySamePositionLocalSearch(players: MatchmakingPlayer[], start: EvaluatedCandidate, safetyPassLimit = 30): SamePositionLocalSearchResult {
+export function runMandatorySamePositionLocalSearch(players: MatchmakingPlayer[], start: EvaluatedCandidate, safetyPassLimit = 30, evalOne?: EvalFn): SamePositionLocalSearchResult {
   let best = start
   let candidatesEvaluated = 0
   let completed = true
+  let requiredCandidates = countSamePositionSwapPairs(best.candidate)
+  const evaluate = evalOne ?? ((raw: Candidate) => {
+    const fixed = repairCandidate(players, raw)
+    if (!fixed) return null
+    return evaluateCandidate(players, fixed, candidateHash(fixed))
+  })
+
   for (let pass = 0; pass < safetyPassLimit; pass++) {
+    requiredCandidates = countSamePositionSwapPairs(best.candidate)
+    let sweepEvaluated = 0
     let bestImprovement: EvaluatedCandidate | null = null
     for (let i = 0; i < best.candidate.length; i++) for (let j = i + 1; j < best.candidate.length; j++) {
       const left = best.candidate[i], right = best.candidate[j]
       if (left.team === right.team || left.position !== right.position) continue
       const swapped = best.candidate.map((g) => ({ ...g })); [swapped[i].team, swapped[j].team] = [swapped[j].team, swapped[i].team]
-      const fixed = repairCandidate(players, swapped)
-      if (!fixed) continue
-      const ev = evaluateCandidate(players, fixed, candidateHash(fixed))
-      if (!ev) continue
+      const before = candidatesEvaluated
+      const ev = evaluate(swapped)
+      if (!ev) { completed = false; continue }
       candidatesEvaluated++
+      sweepEvaluated++
+      if (candidatesEvaluated === before) candidatesEvaluated = before + 1
       if (compareFitnessQuality(ev.fitness, best.fitness) < 0 && (!bestImprovement || compareFitnessQuality(ev.fitness, bestImprovement.fitness) < 0 || (compareFitnessQuality(ev.fitness, bestImprovement.fitness) === 0 && ev.hash.localeCompare(bestImprovement.hash) < 0))) bestImprovement = ev
     }
-    if (!bestImprovement) return { best, candidatesEvaluated, completed }
+    if (sweepEvaluated < requiredCandidates) {
+      if (bestImprovement) best = bestImprovement
+      return { best, candidatesEvaluated, completed: false, requiredCandidates }
+    }
+    if (!bestImprovement) return { best, candidatesEvaluated, completed, requiredCandidates }
     best = bestImprovement
   }
-  completed = false
-  return { best, candidatesEvaluated, completed }
+  return { best, candidatesEvaluated, completed: false, requiredCandidates }
 }
 
 function optionalLocalImprove(players: MatchmakingPlayer[], start: EvaluatedCandidate, evalOne: EvalFn): EvaluatedCandidate {

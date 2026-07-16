@@ -13,8 +13,10 @@ export type PersistedLineupStrengthRow = {
 }
 
 export type PersistedLineupDiagnostic =
-  | { code: "INVALID_TEAM" | "INVALID_POSITION" | "MISSING_GROUP" | "MISSING_RATING" | "MISSING_START_STATE"; signupId: number }
+  | { code: "INVALID_TEAM"; signupId: number; team: number | null }
+  | { code: "INVALID_POSITION" | "MISSING_GROUP" | "MISSING_RATING" | "MISSING_START_STATE"; signupId: number }
   | { code: "INVALID_STARTER_COUNT" | "DUPLICATE_ROTATION_ORDER" | "INVALID_ROTATION_ORDER"; team: TeamNumber; position: PlayerPosition; rotationGroupId: number }
+  | { code: "MIXED_POSITION_GROUP"; team: TeamNumber; rotationGroupId: number; positions: PlayerPosition[] }
 
 export type PersistedTeamStrength = {
   team: TeamNumber
@@ -37,29 +39,42 @@ function isTeam(value: number | null): value is TeamNumber { return value === 1 
 function isPosition(value: string | null | undefined): value is PlayerPosition { return PLAYER_POSITIONS.includes(value as PlayerPosition) }
 
 export function summarizePersistedLineupStrength(rows: PersistedLineupStrengthRow[]): PersistedLineupStrengthSummary {
-  const teams = Object.fromEntries(([1, 2] as const).map((team) => [team, summarizeTeam(rows, team)])) as Record<TeamNumber, PersistedTeamStrength>
+  const globalDiagnostics: PersistedLineupDiagnostic[] = rows
+    .filter((row) => !isTeam(row.team))
+    .map((row) => ({ code: "INVALID_TEAM", signupId: row.signupId, team: row.team }))
+  const teams = Object.fromEntries(([1, 2] as const).map((team) => [team, summarizeTeam(rows, team, globalDiagnostics)])) as Record<TeamNumber, PersistedTeamStrength>
   const strengthDifference = teams[1].effectiveStrength === null || teams[2].effectiveStrength === null ? null : Math.abs(teams[1].effectiveStrength - teams[2].effectiveStrength)
   return { teams, strengthDifference }
 }
 
-function summarizeTeam(rows: PersistedLineupStrengthRow[], team: TeamNumber): PersistedTeamStrength {
+function summarizeTeam(rows: PersistedLineupStrengthRow[], team: TeamNumber, globalDiagnostics: PersistedLineupDiagnostic[]): PersistedTeamStrength {
   const teamRows = rows.filter((row) => row.team === team)
-  const diagnostics: PersistedLineupDiagnostic[] = []
+  const diagnostics: PersistedLineupDiagnostic[] = [...globalDiagnostics]
   const missingRatingSignupIds: number[] = []
   const valid: Array<PersistedLineupStrengthRow & { team: TeamNumber; normalizedPosition: PlayerPosition; rotationGroupId: number; assignedRating: number; startsInWater: boolean }> = []
 
   for (const row of teamRows) {
     const position = row.position ?? row.assignedPosition
-    if (!isTeam(row.team)) { diagnostics.push({ code: "INVALID_TEAM", signupId: row.signupId }); continue }
     if (!isPosition(position)) { diagnostics.push({ code: "INVALID_POSITION", signupId: row.signupId }); continue }
     if (typeof row.rotationGroupId !== "number") { diagnostics.push({ code: "MISSING_GROUP", signupId: row.signupId }); continue }
     if (typeof row.assignedRating !== "number") { diagnostics.push({ code: "MISSING_RATING", signupId: row.signupId }); missingRatingSignupIds.push(row.signupId); continue }
     if (typeof row.startsInWater !== "boolean") { diagnostics.push({ code: "MISSING_START_STATE", signupId: row.signupId }); continue }
-    valid.push({ ...row, team: row.team, normalizedPosition: position, rotationGroupId: row.rotationGroupId, assignedRating: row.assignedRating, startsInWater: row.startsInWater })
+    valid.push({ ...row, team, normalizedPosition: position, rotationGroupId: row.rotationGroupId, assignedRating: row.assignedRating, startsInWater: row.startsInWater })
+  }
+
+  const positionsByGroup = new Map<number, Set<PlayerPosition>>()
+  for (const row of valid) positionsByGroup.set(row.rotationGroupId, (positionsByGroup.get(row.rotationGroupId) ?? new Set()).add(row.normalizedPosition))
+  const mixedGroupIds = new Set<number>()
+  for (const [rotationGroupId, positions] of positionsByGroup) {
+    if (positions.size > 1) {
+      mixedGroupIds.add(rotationGroupId)
+      diagnostics.push({ code: "MIXED_POSITION_GROUP", team, rotationGroupId, positions: [...positions].sort() })
+    }
   }
 
   const grouped = new Map<string, typeof valid>()
   for (const row of valid.sort((a, b) => a.normalizedPosition.localeCompare(b.normalizedPosition) || a.rotationGroupId - b.rotationGroupId || (a.rotationOrder ?? 0) - (b.rotationOrder ?? 0) || a.signupId - b.signupId)) {
+    if (mixedGroupIds.has(row.rotationGroupId)) continue
     const key = `${row.team}:${row.normalizedPosition}:${row.rotationGroupId}`
     grouped.set(key, [...(grouped.get(key) ?? []), row])
   }
