@@ -112,3 +112,16 @@ export function expectValidClosedRotationCycle(group: RotationGroup) {
 export function expectDeterministicSemanticResult(a: MatchmakingResult, b: MatchmakingResult) {
   expect(semanticAssignments(a)).toEqual(semanticAssignments(b))
 }
+
+export function expectNoImprovingSamePositionSwap(players: MatchmakingPlayer[], result: MatchmakingResult) {
+  // Lazy require avoids adding runtime dependencies to production helpers.
+  const { evaluateCandidate, compareFitnessQuality } = require("../../fitness") as typeof import("../../fitness")
+  const base = evaluateCandidate(players, result.assignments.map((assignment) => ({ signupId: assignment.signupId, team: assignment.team, position: assignment.position })))!
+  for (let i = 0; i < base.candidate.length; i++) for (let j = i + 1; j < base.candidate.length; j++) {
+    if (base.candidate[i].team === base.candidate[j].team || base.candidate[i].position !== base.candidate[j].position) continue
+    const swapped = base.candidate.map((gene) => ({ ...gene }))
+    ;[swapped[i].team, swapped[j].team] = [swapped[j].team, swapped[i].team]
+    const evaluated = evaluateCandidate(players, swapped)
+    if (evaluated) expect(compareFitnessQuality(evaluated.fitness, base.fitness)).toBeGreaterThanOrEqual(0)
+  }
+}

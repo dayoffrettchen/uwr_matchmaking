@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 import { summarizePersistedLineupStrength } from "./persisted-lineup-strength"
 
-function row(signupId: number, team: 1 | 2, position: "defender" | "goalkeeper" | "forward", group: number, rating: number, startsInWater = true, rotationOrder = 1) {
+function row(signupId: number, team: 1 | 2, position: "defender" | "goalkeeper" | "forward", group: number, rating: number | null, startsInWater = true, rotationOrder = 1) {
   return { signupId, team, position, rotationGroupId: group, assignedRating: rating, startsInWater, rotationOrder }
 }
 
@@ -26,5 +26,31 @@ describe("persisted-lineup-strength", () => {
     expect(auto.teams[2].participantAverageRating).toBe(1094)
     expect(manual.teams[1].participantAverageRating).toBe(1078)
     expect(manual.teams[2].participantAverageRating).toBe(1082)
+  })
+
+  it("does not report complete effective MMR when an active player is missing a rating", () => {
+    const summary = summarizePersistedLineupStrength([
+      row(1, 1, "goalkeeper", 1, null, true),
+      ...[2, 3, 4, 5, 6].map((id) => row(id, 1, id % 2 ? "defender" : "forward", id, 1000, true)),
+      row(7, 1, "forward", 7, 1000, false),
+    ])
+    expect(summary.teams[1].activeCount).toBe(6)
+    expect(summary.teams[1].substituteCount).toBe(1)
+    expect(summary.teams[1].complete).toBe(false)
+    expect(summary.teams[1].effectiveStrength).toBe(null)
+    expect(summary.teams[1].missingRatingSignupIds).toEqual([1])
+  })
+
+  it("returns diagnostics for invalid persisted rotation slots", () => {
+    const zeroStarter = summarizePersistedLineupStrength([row(1, 1, "defender", 1, 1000, false)])
+    expect(zeroStarter.teams[1].diagnostics.map((d) => d.code)).toContain("INVALID_STARTER_COUNT")
+    const twoStarters = summarizePersistedLineupStrength([row(1, 1, "defender", 1, 1000, true), row(2, 1, "defender", 1, 990, true, 2)])
+    expect(twoStarters.teams[1].diagnostics.map((d) => d.code)).toContain("INVALID_STARTER_COUNT")
+    const duplicateOrder = summarizePersistedLineupStrength([row(1, 1, "defender", 1, 1000, true), row(2, 1, "defender", 1, 990, false, 1)])
+    expect(duplicateOrder.teams[1].diagnostics.map((d) => d.code)).toContain("DUPLICATE_ROTATION_ORDER")
+    const invalidOrder = summarizePersistedLineupStrength([row(1, 1, "defender", 1, 1000, true, 0)])
+    expect(invalidOrder.teams[1].diagnostics.map((d) => d.code)).toContain("INVALID_ROTATION_ORDER")
+    const missingStart = summarizePersistedLineupStrength([{ signupId: 1, team: 1, position: "defender", rotationGroupId: 1, assignedRating: 1000, startsInWater: null, rotationOrder: 1 }])
+    expect(missingStart.teams[1].diagnostics.map((d) => d.code)).toContain("MISSING_START_STATE")
   })
 })

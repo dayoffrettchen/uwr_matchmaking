@@ -58,7 +58,7 @@ export function calculateTargetLineupPenalty(assignments: MatchmakingAssignment[
   }, 0)
 }
 
-export function compareBreakdowns(a: FitnessBreakdown, b: FitnessBreakdown, aTie = "", bTie = ""): number {
+export function compareFitnessQuality(a: FitnessBreakdown, b: FitnessBreakdown): number {
   // Lexicographic priority keeps effective team-strength fairness from being hidden
   // by softer rotation or preference penalties. The scalar total remains diagnostic.
   return a.hardViolations - b.hardViolations
@@ -74,7 +74,14 @@ export function compareBreakdowns(a: FitnessBreakdown, b: FitnessBreakdown, aTie
     || a.preferencePenalty - b.preferencePenalty
     || a.confidencePenalty - b.confidencePenalty
     || a.unratedPlayerPenalty - b.unratedPlayerPenalty
-    || aTie.localeCompare(bTie)
+}
+
+export function compareEvaluatedCandidates(a: Pick<EvaluatedCandidate, "fitness" | "hash">, b: Pick<EvaluatedCandidate, "fitness" | "hash">): number {
+  return compareFitnessQuality(a.fitness, b.fitness) || a.hash.localeCompare(b.hash)
+}
+
+export function compareBreakdowns(a: FitnessBreakdown, b: FitnessBreakdown, aTie = "", bTie = ""): number {
+  return compareFitnessQuality(a, b) || aTie.localeCompare(bTie)
 }
 
 export function evaluateCandidate(players: MatchmakingPlayer[], candidate: Candidate, hash = ""): EvaluatedCandidate | null {

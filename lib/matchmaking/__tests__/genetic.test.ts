@@ -2,8 +2,11 @@ import { describe, expect, it } from "vitest"
 import { PLAYER_POSITIONS, type PlayerPosition } from "@/lib/ratings/types"
 import { balanceMatchmakingPlayers, buildPositionSlotGroups, buildRotationSteps, finalizeUnderwaterRugbyLineup } from "../balance-teams"
 import { fromDraftAssignments } from "../candidate"
+import { runMandatorySamePositionLocalSearch } from "../genetic"
+import { summarizePersistedLineupStrength } from "../persisted-lineup-strength"
+import { expectNoImprovingSamePositionSwap } from "./fixtures/domain-contract"
 import { OBJECTIVE_WEIGHTS } from "../constants"
-import { evaluateCandidate, getPositionPenalty } from "../fitness"
+import { compareEvaluatedCandidates, compareFitnessQuality, evaluateCandidate, getPositionPenalty } from "../fitness"
 import { buildGreedySeed } from "../greedy"
 import { getTargetLineup } from "../target-lineup"
 import type { MatchmakingPlayer } from "../types"
@@ -218,5 +221,79 @@ describe("genetisches Matchmaking", () => {
     expect(result.assignments).toHaveLength(players.length)
     expect(result.candidatesEvaluated).toBeLessThan(500)
     expect(result.assignments.every((assignment) => assignment.position === "forward")).toBe(true)
+  })
+})
+
+function screenshotPlayer(id: number, name: string, position: PlayerPosition, rating: number): MatchmakingPlayer {
+  return player(id, name, { [position]: rating }, [position])
+}
+
+function heckeHolgerFixture() {
+  const players = [
+    screenshotPlayer(1, "Tim", "defender", 1131), screenshotPlayer(2, "Moe", "defender", 991), screenshotPlayer(3, "Holger", "defender", 999),
+    screenshotPlayer(4, "C2", "defender", 1337), screenshotPlayer(5, "Hecke", "defender", 1128), screenshotPlayer(6, "Sven-E", "defender", 1157), screenshotPlayer(7, "Rodolfo", "defender", 972),
+    ...[1076, 1076, 1076, 1076].map((rating, index) => screenshotPlayer(100 + index, `Blau G${index}`, "goalkeeper", rating)),
+    ...[1076, 1076, 1076, 1073].map((rating, index) => screenshotPlayer(110 + index, `Blau F${index}`, "forward", rating)),
+    ...[1063, 1063, 1063, 1063].map((rating, index) => screenshotPlayer(200 + index, `Weiß G${index}`, "goalkeeper", rating)),
+    ...[1063, 1063, 1062].map((rating, index) => screenshotPlayer(210 + index, `Weiß F${index}`, "forward", rating)),
+  ]
+  const automatic = [
+    ...[1, 2, 3, 100, 101, 102, 103, 110, 111, 112, 113].map((signupId) => ({ signupId, team: 1 as const })),
+    ...[4, 5, 6, 7, 200, 201, 202, 203, 210, 211, 212].map((signupId) => ({ signupId, team: 2 as const })),
+  ].map(({ signupId, team }) => ({ signupId, team, position: players.find((p) => p.signupId === signupId)!.eligiblePositions[0] }))
+  const improved = automatic.map((gene) => gene.signupId === 3 ? { ...gene, team: 2 as const } : gene.signupId === 5 ? { ...gene, team: 1 as const } : gene)
+  return { players, automatic, improved }
+}
+
+function persistedRowsFromEvaluated(result: ReturnType<typeof evaluateCandidate>) {
+  if (!result) return []
+  const byAssignment = new Map(result.assignments.map((assignment) => [assignment.signupId, assignment]))
+  return result.rotationGroups.flatMap((group) => group.members.map((member) => {
+    const assignment = byAssignment.get(member.signupId)!
+    return { signupId: member.signupId, team: group.team, position: group.position, rotationGroupId: group.id, assignedRating: member.rating, startsInWater: member.startsInWater, rotationOrder: assignment.rotationOrder }
+  }))
+}
+
+function assertSixSlotLineup(result: ReturnType<typeof evaluateCandidate>) {
+  expect(result!.rotationGroups.filter((group) => group.team === 1)).toHaveLength(6)
+  expect(result!.rotationGroups.filter((group) => group.team === 2)).toHaveLength(6)
+  expect(result!.assignments.filter((assignment) => assignment.team === 1 && assignment.startsInWater)).toHaveLength(6)
+  expect(result!.assignments.filter((assignment) => assignment.team === 2 && assignment.startsInWater)).toHaveLength(6)
+  expect(result!.assignments.filter((assignment) => assignment.team === 1)).toHaveLength(11)
+  expect(result!.assignments.filter((assignment) => assignment.team === 2)).toHaveLength(11)
+}
+
+describe("same-position local search regression", () => {
+  it("distinguishes substantive quality from hash tie-breaking", () => {
+    const players = [screenshotPlayer(1, "A", "defender", 1000), screenshotPlayer(2, "B", "defender", 1000)]
+    const candidate = [{ signupId: 1, team: 1 as const, position: "defender" as const }, { signupId: 2, team: 2 as const, position: "defender" as const }]
+    const a = evaluateCandidate(players, candidate, "z")!
+    const b = evaluateCandidate(players, candidate, "a")!
+    expect(compareFitnessQuality(a.fitness, b.fitness)).toBe(0)
+    expect(compareEvaluatedCandidates(b, a)).toBeLessThan(0)
+    const local = runMandatorySamePositionLocalSearch(players, a)
+    expect(local.best.hash).toBe(a.hash)
+  })
+
+  it("finds the Hecke/Holger same-position improvement from the automatic arrangement", () => {
+    const { players, automatic, improved } = heckeHolgerFixture()
+    const auto = evaluateCandidate(players, automatic, "auto")!
+    const manual = evaluateCandidate(players, improved, "manual")!
+    assertSixSlotLineup(auto)
+    assertSixSlotLineup(manual)
+    expect(manual.fitness.effectiveStrengthDifference).toBeLessThan(auto.fitness.effectiveStrengthDifference)
+    const autoUi = summarizePersistedLineupStrength(persistedRowsFromEvaluated(auto))
+    const manualUi = summarizePersistedLineupStrength(persistedRowsFromEvaluated(manual))
+    expect(autoUi.teams[1].participantAverageRating).toBe(1066)
+    expect(autoUi.teams[2].participantAverageRating).toBe(1094)
+    expect(manualUi.teams[1].participantAverageRating).toBe(1078)
+    expect(manualUi.teams[2].participantAverageRating).toBe(1082)
+    expect(autoUi.teams[1].effectiveStrength).toBe(auto.team1.effectiveStrength)
+    expect(autoUi.teams[2].effectiveStrength).toBe(auto.team2.effectiveStrength)
+    const local = runMandatorySamePositionLocalSearch(players, auto)
+    expect(local.completed).toBe(true)
+    expect(local.candidatesEvaluated).toBeGreaterThan(0)
+    expect(compareFitnessQuality(local.best.fitness, manual.fitness)).toBeLessThanOrEqual(0)
+    expectNoImprovingSamePositionSwap(players, local.best)
   })
 })

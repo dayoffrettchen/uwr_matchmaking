@@ -200,7 +200,7 @@ function TeamColumn({
   onPositionDrop: (event: DragEvent<HTMLDivElement>, position: PlayerPosition) => void
 }) {
   const strength = summarizePersistedLineupStrength(players).teams[variant === "primary" ? 1 : 2]
-  const active = strength.activeCount || players.filter((p) => p.startsInWater ?? p.lineupType !== "substitute").length
+  const active = players.filter((p) => p.startsInWater ?? p.lineupType !== "substitute").length
   const subs = players.length - active
   const averageRating = strength.participantAverageRating
   const effectiveRating = strength.effectiveStrength

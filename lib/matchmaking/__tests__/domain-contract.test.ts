@@ -15,6 +15,7 @@ import {
   expectOnlyEligiblePositions,
   expectTwoIndependentSlotsPerPosition,
   expectValidClosedRotationCycle,
+  expectNoImprovingSamePositionSwap,
   rosters,
   seededRoster,
 } from "./fixtures/domain-contract"
@@ -136,6 +137,14 @@ describe("matchmaking domain contract: current characterization", () => {
     const players = rosters.equalRating()
     const first = balanceMatchmakingPlayers(players, TEST_OPTIONS)
     assertCoreInvariants(players, first)
+  })
+
+
+  it("has no improving same-position swap when mandatory local search completes on representative rosters", () => {
+    for (const players of [rosters.twelveFeasible(), rosters.fourteenFeasible(), rosters.equalRating(), seededRoster(22, 606), seededRoster(18, 707), seededRoster(20, 808)]) {
+      const result = balanceMatchmakingPlayers(players, { ...TEST_OPTIONS, maxCandidates: 1200, maxComputationTimeMs: 0 })
+      if (result.diagnostics?.mandatorySamePositionCompleted) expectNoImprovingSamePositionSwap(players, result)
+    }
   })
 
   it("normalizes input order for the same logical roster and seed", () => {

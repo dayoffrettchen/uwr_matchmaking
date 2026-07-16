@@ -7,6 +7,8 @@ describe("rotation-strength", () => {
   it("scores one player as their rating and substitutes monotonically", () => {
     expect(calculateEffectiveSlotRating({ members: [m(1267)] })).toBe(1267)
     expect(calculateEffectiveSlotRating({ members: [m(1267), m(1012)] })).toBe(1297)
+    expect(calculateEffectiveSlotRating({ members: [m(1337), m(1128)] })).toBe(1367)
+    expect(calculateEffectiveSlotRating({ members: [m(1337), m(999)] })).toBe(1367)
     expect(calculateEffectiveSlotRating({ members: [m(1267), m(1267)] })).toBe(1297)
     expect(calculateEffectiveSlotRating({ members: [m(1267), m(1400)] })).toBe(1430)
     expect(calculateEffectiveSlotRating({ members: [m(1267), m(1012), m(999)] })).toBe(1327)

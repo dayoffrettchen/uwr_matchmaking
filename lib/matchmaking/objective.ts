@@ -1,1 +1,1 @@
-export { getPositionPenalty, scoreAssignments, evaluateCandidate, compareBreakdowns, type FitnessBreakdown } from "./fitness"
+export { getPositionPenalty, scoreAssignments, evaluateCandidate, compareBreakdowns, compareFitnessQuality, compareEvaluatedCandidates, type FitnessBreakdown } from "./fitness"
