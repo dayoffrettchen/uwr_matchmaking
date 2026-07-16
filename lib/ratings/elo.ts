@@ -9,6 +9,8 @@ export function calculateParticipantAverageRating(players: RatedMatchPlayer[]): 
   return players.reduce((total, player) => total + player.positionRating, 0) / players.length
 }
 
+// TODO: Match finalization still uses participant-average team ratings plus a substitute bonus.
+// Align expected-score calculation with final rotation-slot strength after organizer approval.
 export function calculateEffectiveTeamRating(players: RatedMatchPlayer[]): number {
   const averageRating = calculateParticipantAverageRating(players)
   const substituteCount = players.filter((player) => player.lineupType === "substitute").length

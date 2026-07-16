@@ -64,4 +64,5 @@ export type TeamSummary = {
   confidence: number
 }
 export type MatchmakingQuality = "high" | "medium" | "low"
-export type MatchmakingResult = { assignments: MatchmakingAssignment[]; rotationGroups: RotationGroup[]; team1: TeamSummary; team2: TeamSummary; warnings: string[]; computationTimeMs: number; candidatesEvaluated: number; optimality: "exact" | "best-found"; quality: MatchmakingQuality }
+export type MatchmakingDiagnostics = { effectiveStrengthDifference: number; startingLineupDifference: number; positionStrengthDifference: number; targetLineupPenalty: number; localSearchCandidates: number; localSearchCompleted: boolean }
+export type MatchmakingResult = { assignments: MatchmakingAssignment[]; rotationGroups: RotationGroup[]; team1: TeamSummary; team2: TeamSummary; warnings: string[]; computationTimeMs: number; candidatesEvaluated: number; optimality: "exact" | "best-found"; quality: MatchmakingQuality; diagnostics?: MatchmakingDiagnostics }

@@ -14,11 +14,16 @@ export function runGeneticOptimization(input: MatchmakingPlayer[], options: Gene
   const started = Date.now()
   const players = canonicalizePlayers(input)
   const prng = createPrng(options.seed ?? stableInputSeed(players))
+  const requestedLocalCandidateBudget = Math.max(64, Math.ceil(options.maxCandidates * 0.25))
+  const localCandidateBudget = Math.max(0, Math.min(requestedLocalCandidateBudget, options.maxCandidates - 1))
+  const geneticCandidateBudget = Math.max(1, options.maxCandidates - localCandidateBudget)
+  const localTimeBudgetMs = options.maxComputationTimeMs > 0 ? Math.max(25, Math.ceil(options.maxComputationTimeMs * 0.25)) : 0
+  const geneticTimeBudgetMs = options.maxComputationTimeMs > 0 ? Math.max(1, options.maxComputationTimeMs - localTimeBudgetMs) : 0
   let evaluated = 0
   const seen = new Set<string>()
   const evalOne: EvalFn = (raw) => {
-    if (evaluated >= options.maxCandidates) return null
-    if (options.maxComputationTimeMs > 0 && Date.now() - started > options.maxComputationTimeMs) return null
+    if (evaluated >= geneticCandidateBudget) return null
+    if (geneticTimeBudgetMs > 0 && Date.now() - started > geneticTimeBudgetMs) return null
     const candidate = repairCandidate(players, raw)
     if (!candidate) return null
     const hash = candidateHash(candidate)
@@ -48,10 +53,10 @@ export function runGeneticOptimization(input: MatchmakingPlayer[], options: Gene
   pushEval(population, snake(players))
   for (const pos of PLAYER_POSITIONS) pushEval(population, byPosition(players, pos))
   for (const candidate of enumerateSmallRosterCandidates(players)) pushEval(population, candidate)
-  fillPopulation(population, options.populationSize, () => randomCandidate(players, prng), pushEval, () => evaluated, options.maxCandidates, started, options.maxComputationTimeMs)
+  fillPopulation(population, options.populationSize, () => randomCandidate(players, prng), pushEval, () => evaluated, geneticCandidateBudget, started, geneticTimeBudgetMs)
   for (let i = 0; i < Math.min(12, options.populationSize); i++) pushEval(population, mutate(players, greedy.candidate, prng, best))
 
-  for (let gen = 0; gen < options.maxGenerations && evaluated < options.maxCandidates; gen++) {
+  for (let gen = 0; gen < options.maxGenerations && evaluated < geneticCandidateBudget; gen++) {
     population.sort((a, b) => compareBreakdowns(a.fitness, b.fitness, a.hash, b.hash))
     const next = [greedy, best, ...population.slice(0, 4)].filter((v, i, a) => a.findIndex((x) => x.hash === v.hash) === i)
     fillPopulation(
@@ -65,16 +70,28 @@ export function runGeneticOptimization(input: MatchmakingPlayer[], options: Gene
       },
       pushEval,
       () => evaluated,
-      options.maxCandidates,
+      geneticCandidateBudget,
       started,
-      options.maxComputationTimeMs,
+      geneticTimeBudgetMs,
     )
     population = next
   }
-  best = localImprove(players, best, evalOne)
+  let localEvaluated = 0
+  const localStarted = Date.now()
+  let localCompleted = true
+  const evalLocal: EvalFn = (raw) => {
+    if (localEvaluated >= localCandidateBudget) { localCompleted = false; return null }
+    if (localTimeBudgetMs > 0 && Date.now() - localStarted > localTimeBudgetMs) { localCompleted = false; return null }
+    const candidate = repairCandidate(players, raw)
+    if (!candidate) return null
+    const result = evaluateCandidate(players, candidate, candidateHash(candidate))
+    if (result) localEvaluated++
+    return result
+  }
+  best = localImprove(players, best, evalLocal)
   if (compareBreakdowns(best.fitness, greedy.fitness, best.hash, greedy.hash) > 0) best = greedy
   warnings.push(...best.warnings)
-  return { assignments: best.assignments, rotationGroups: best.rotationGroups, team1: best.team1, team2: best.team2, warnings: [], computationTimeMs: Date.now() - started, candidatesEvaluated: evaluated, optimality: "best-found", quality: "medium" }
+  return { assignments: best.assignments, rotationGroups: best.rotationGroups, team1: best.team1, team2: best.team2, warnings: [], computationTimeMs: Date.now() - started, candidatesEvaluated: evaluated + localEvaluated, optimality: "best-found", quality: "medium", diagnostics: { effectiveStrengthDifference: best.fitness.effectiveStrengthDifference, startingLineupDifference: best.fitness.startingLineupDifference, positionStrengthDifference: best.fitness.positionStrengthDifference, targetLineupPenalty: best.fitness.targetLineupPenalty, localSearchCandidates: localEvaluated, localSearchCompleted: localCompleted } }
 }
 
 function fillPopulation(
@@ -161,14 +178,36 @@ function mutate(players: MatchmakingPlayer[], candidate: Candidate, prng: Random
 }
 function localImprove(players: MatchmakingPlayer[], start: EvaluatedCandidate, evalOne: EvalFn): EvaluatedCandidate {
   let best = start
-  for (let i = 0; i < best.candidate.length; i++) for (let j = i + 1; j < best.candidate.length; j++) {
-    const swapped = best.candidate.map((g) => ({ ...g })); [swapped[i].team, swapped[j].team] = [swapped[j].team, swapped[i].team]
-    const ev = evalOne(swapped); if (ev && compareBreakdowns(ev.fitness, best.fitness, ev.hash, best.hash) < 0) best = ev
-  }
   const byId = new Map(players.map((p) => [p.signupId, p]))
-  for (let i = 0; i < best.candidate.length; i++) for (const pos of byId.get(best.candidate[i].signupId)!.eligiblePositions) {
-    const changed = best.candidate.map((g) => ({ ...g })); changed[i].position = pos
-    const ev = evalOne(changed); if (ev && compareBreakdowns(ev.fitness, best.fitness, ev.hash, best.hash) < 0) best = ev
+  const tryCandidate = (candidate: Candidate): boolean => {
+    const ev = evalOne(candidate)
+    if (ev && compareBreakdowns(ev.fitness, best.fitness, ev.hash, best.hash) < 0) { best = ev; return true }
+    return false
   }
+  const passSamePositionSwap = () => {
+    for (let i = 0; i < best.candidate.length; i++) for (let j = i + 1; j < best.candidate.length; j++) {
+      if (best.candidate[i].team === best.candidate[j].team || best.candidate[i].position !== best.candidate[j].position) continue
+      const swapped = best.candidate.map((g) => ({ ...g })); [swapped[i].team, swapped[j].team] = [swapped[j].team, swapped[i].team]
+      if (tryCandidate(swapped)) return true
+    }
+    return false
+  }
+  const passAnySwap = () => {
+    for (let i = 0; i < best.candidate.length; i++) for (let j = i + 1; j < best.candidate.length; j++) {
+      if (best.candidate[i].team === best.candidate[j].team) continue
+      const swapped = best.candidate.map((g) => ({ ...g })); [swapped[i].team, swapped[j].team] = [swapped[j].team, swapped[i].team]
+      if (tryCandidate(swapped)) return true
+    }
+    return false
+  }
+  const passPositionChange = () => {
+    for (let i = 0; i < best.candidate.length; i++) for (const pos of byId.get(best.candidate[i].signupId)!.eligiblePositions) {
+      if (pos === best.candidate[i].position) continue
+      const changed = best.candidate.map((g) => ({ ...g })); changed[i].position = pos
+      if (tryCandidate(changed)) return true
+    }
+    return false
+  }
+  while (passSamePositionSwap() || passAnySwap() || passPositionChange()) { /* restart neighborhoods after each strict improvement */ }
   return best
 }

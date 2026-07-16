@@ -3,6 +3,7 @@ import { db } from "@/lib/db"
 import { players, playerPositionRatings, signups, trainings } from "@/lib/db/schema"
 import { getRatingConfidence, getRatingStatus } from "@/lib/ratings/confidence"
 import { ROTATION_BONUS_PER_SUBSTITUTE } from "@/lib/ratings/constants"
+import { calculateEffectiveSlotRating, calculateEffectiveTeamStrength as calculateSharedEffectiveTeamStrength, calculateParticipantAverageRating } from "@/lib/ratings/rotation-strength"
 import { PLAYER_POSITIONS, type PlayerPosition } from "@/lib/ratings/types"
 import { MAX_CANDIDATES, MAX_COMPUTATION_TIME_MS } from "./constants"
 import { ACTIVE_SLOTS_PER_POSITION, getActivePlayersPerTeamLimit, MAX_ACTIVE_PLAYERS_PER_TEAM, TEAM_NUMBERS } from "./rules"
@@ -23,7 +24,7 @@ function makeGroup(id: number, team: 1 | 2, position: PlayerPosition, members: M
   const activePairRatings = type === "triple" && activeSlotCount > 1 ? ratings.map((rating, index) => (rating + ratings[(index + 1) % ratings.length]) / 2) : undefined
   const averageMemberRating = Math.round(average(ratings))
   const substituteCount = Math.max(0, members.length - activeSlotCount)
-  const effectiveRating = Math.round(averageMemberRating + substituteCount * ROTATION_BONUS_PER_SUBSTITUTE)
+  const effectiveRating = Math.round(calculateEffectiveSlotRating({ members: ratings.map((rating, index) => ({ rating, startsInWater: startIndexes.has(index) })) }))
   return {
     id, team, position, type, activeSlotCount,
     members: members.map((member, index) => ({ signupId: member.signupId, playerId: member.playerId, name: member.name, rating: member.ratings[position], rotationOrder: index + 1, startsInWater: startIndexes.has(index) })),
@@ -89,7 +90,7 @@ export function completeAssignments(players: MatchmakingPlayer[], drafts: DraftA
 export function calculateEffectiveTeamStrength(groups: RotationGroup[]): number {
   const activeSlotCount = groups.reduce((sum, group) => sum + group.activeSlotCount, 0)
   if (activeSlotCount === 0) throw new Error("Team besitzt keine aktiven Plätze")
-  return groups.reduce((sum, group) => sum + group.effectiveRating * group.activeSlotCount, 0) / activeSlotCount
+  return calculateSharedEffectiveTeamStrength(groups.flatMap((group) => Array.from({ length: group.activeSlotCount }, () => ({ members: group.members.map((member) => ({ rating: member.rating, startsInWater: member.startsInWater })) }))))
 }
 
 export function summarize(playersBySignup: Map<number, MatchmakingPlayer>, assignments: MatchmakingAssignment[], rotationGroups: RotationGroup[], team: 1 | 2): TeamSummary {
@@ -97,7 +98,7 @@ export function summarize(playersBySignup: Map<number, MatchmakingPlayer>, assig
   const active = mine.filter((a) => a.startsInWater)
   const subs = mine.filter((a) => !a.startsInWater)
   const avg = (items: MatchmakingAssignment[]) => items.reduce((sum, a) => sum + playersBySignup.get(a.signupId)!.ratings[a.position], 0) / Math.max(1, items.length)
-  const averageParticipantRating = Math.round(avg(mine))
+  const averageParticipantRating = Math.round(calculateParticipantAverageRating(mine.map((a) => ({ rating: playersBySignup.get(a.signupId)!.ratings[a.position] }))))
   const rotationBonus = rotationGroups.filter((group) => group.team === team).reduce((sum, group) => sum + Math.max(0, group.members.length - 1) * ROTATION_BONUS_PER_SUBSTITUTE, 0)
   return {
     activeCount: active.length,

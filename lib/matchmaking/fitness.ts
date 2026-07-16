@@ -59,7 +59,22 @@ export function calculateTargetLineupPenalty(assignments: MatchmakingAssignment[
 }
 
 export function compareBreakdowns(a: FitnessBreakdown, b: FitnessBreakdown, aTie = "", bTie = ""): number {
-  return a.hardViolations - b.hardViolations || a.total - b.total || aTie.localeCompare(bTie)
+  // Lexicographic priority keeps effective team-strength fairness from being hidden
+  // by softer rotation or preference penalties. The scalar total remains diagnostic.
+  return a.hardViolations - b.hardViolations
+    || a.targetLineupPenalty - b.targetLineupPenalty
+    || a.activePlayerDifference - b.activePlayerDifference
+    || a.effectiveStrengthDifference - b.effectiveStrengthDifference
+    || a.positionStrengthDifference - b.positionStrengthDifference
+    || a.startingLineupDifference - b.startingLineupDifference
+    || a.substituteAdvantagePenalty - b.substituteAdvantagePenalty
+    || a.rotationMatchPenalty - b.rotationMatchPenalty
+    || a.rotationSpreadPenalty - b.rotationSpreadPenalty
+    || a.positionCrowdingPenalty - b.positionCrowdingPenalty
+    || a.preferencePenalty - b.preferencePenalty
+    || a.confidencePenalty - b.confidencePenalty
+    || a.unratedPlayerPenalty - b.unratedPlayerPenalty
+    || aTie.localeCompare(bTie)
 }
 
 export function evaluateCandidate(players: MatchmakingPlayer[], candidate: Candidate, hash = ""): EvaluatedCandidate | null {
