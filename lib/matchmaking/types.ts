@@ -64,4 +64,18 @@ export type TeamSummary = {
   confidence: number
 }
 export type MatchmakingQuality = "high" | "medium" | "low"
-export type MatchmakingResult = { assignments: MatchmakingAssignment[]; rotationGroups: RotationGroup[]; team1: TeamSummary; team2: TeamSummary; warnings: string[]; computationTimeMs: number; candidatesEvaluated: number; optimality: "exact" | "best-found"; quality: MatchmakingQuality }
+/** Successful candidate evaluations by phase. The greedy baseline counts as one genetic candidate; failed repair attempts are not included. */
+export type MatchmakingDiagnostics = {
+  effectiveStrengthDifference: number
+  startingLineupDifference: number
+  positionStrengthDifference: number
+  targetLineupPenalty: number
+  geneticCandidates: number
+  mandatorySamePositionCandidates: number
+  mandatorySamePositionRequiredCandidates: number
+  mandatorySamePositionCompleted: boolean
+  optionalLocalCandidates: number
+  optionalLocalCompleted: boolean
+  totalCandidates: number
+}
+export type MatchmakingResult = { assignments: MatchmakingAssignment[]; rotationGroups: RotationGroup[]; team1: TeamSummary; team2: TeamSummary; warnings: string[]; computationTimeMs: number; candidatesEvaluated: number; optimality: "exact" | "best-found"; quality: MatchmakingQuality; diagnostics?: MatchmakingDiagnostics }

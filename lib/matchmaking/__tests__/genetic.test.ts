@@ -220,3 +220,56 @@ describe("genetisches Matchmaking", () => {
     expect(result.assignments.every((assignment) => assignment.position === "forward")).toBe(true)
   })
 })
+
+describe("matchmaking candidate accounting", () => {
+  function accountingRoster(count: number, flexible: boolean): MatchmakingPlayer[] {
+    return Array.from({ length: count }, (_, index) => {
+      const position = PLAYER_POSITIONS[index % PLAYER_POSITIONS.length]
+      const eligiblePositions = flexible ? [...PLAYER_POSITIONS] : [position]
+      return player(10_000 + index, `A${index}`, Object.fromEntries(PLAYER_POSITIONS.map((pos, posIndex) => [pos, 900 + index * 7 + posIndex])) as Partial<Record<PlayerPosition, number>>, eligiblePositions)
+    })
+  }
+
+  function expectConsistentAccounting(result: ReturnType<typeof balanceMatchmakingPlayers>, limit: number) {
+    expect(result.candidatesEvaluated).toBeLessThanOrEqual(limit)
+    expect(result.diagnostics?.totalCandidates).toBe(result.candidatesEvaluated)
+    expect((result.diagnostics?.geneticCandidates ?? 0) + (result.diagnostics?.mandatorySamePositionCandidates ?? 0) + (result.diagnostics?.optionalLocalCandidates ?? 0)).toBe(result.candidatesEvaluated)
+  }
+
+  it("keeps a 30-flexible-player run within one honest 500-candidate budget", () => {
+    const result = balanceMatchmakingPlayers(accountingRoster(30, true), { seed: 1234, maxCandidates: 500, maxGenerations: 80, maxComputationTimeMs: 0, populationSize: 48 })
+    expectConsistentAccounting(result, 500)
+    expect(result.diagnostics!.geneticCandidates).toBeGreaterThan(1)
+    expect(result.diagnostics!.mandatorySamePositionRequiredCandidates).toBeLessThanOrEqual(Math.floor(30 * 30 / 4))
+  })
+
+  it("keeps a 30-single-position-player run within one honest 500-candidate budget", () => {
+    const result = balanceMatchmakingPlayers(accountingRoster(30, false), { seed: 4321, maxCandidates: 500, maxGenerations: 80, maxComputationTimeMs: 0, populationSize: 48 })
+    expectConsistentAccounting(result, 500)
+    expect(result.diagnostics!.mandatorySamePositionRequiredCandidates).toBeLessThanOrEqual(225)
+  })
+
+  it("reports partial mandatory search honestly for a tiny candidate budget", () => {
+    const result = balanceMatchmakingPlayers(accountingRoster(30, false), { seed: 333, maxCandidates: 20, maxGenerations: 80, maxComputationTimeMs: 0, populationSize: 48 })
+    expectConsistentAccounting(result, 20)
+    expect(result.diagnostics!.mandatorySamePositionCompleted).toBe(false)
+  })
+
+  it("does not run hidden searches when the configured budget is zero", () => {
+    const result = balanceMatchmakingPlayers(accountingRoster(12, true), { seed: 5, maxCandidates: 0, maxGenerations: 0, maxComputationTimeMs: 0, populationSize: 48 })
+    expect(result.candidatesEvaluated).toBe(1)
+    expect(result.diagnostics!.geneticCandidates).toBe(1)
+    expect(result.diagnostics!.mandatorySamePositionCandidates).toBe(0)
+    expect(result.diagnostics!.optionalLocalCandidates).toBe(0)
+    expect(result.diagnostics!.totalCandidates).toBe(1)
+  })
+
+  it("uses one global deadline with an earlier genetic cutoff", () => {
+    let tick = 0
+    const result = balanceMatchmakingPlayers(accountingRoster(30, true), { seed: 6, maxCandidates: 500, maxGenerations: 80, maxComputationTimeMs: 20, populationSize: 48, now: () => Math.min(tick++, 20) })
+    expect(result.computationTimeMs).toBeLessThanOrEqual(20)
+    expect(result.diagnostics!.geneticCandidates).toBeGreaterThan(1)
+    expect(result.diagnostics!.totalCandidates).toBe(result.candidatesEvaluated)
+    expect(result.diagnostics!.mandatorySamePositionCompleted || result.diagnostics!.optionalLocalCompleted).toBe(false)
+  })
+})

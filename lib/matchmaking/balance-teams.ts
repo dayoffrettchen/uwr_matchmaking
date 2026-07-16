@@ -2,7 +2,7 @@ import { and, asc, eq, inArray } from "drizzle-orm"
 import { db } from "@/lib/db"
 import { players, playerPositionRatings, signups, trainings } from "@/lib/db/schema"
 import { getRatingConfidence, getRatingStatus } from "@/lib/ratings/confidence"
-import { ROTATION_BONUS_PER_SUBSTITUTE } from "@/lib/ratings/constants"
+import { calculateRotationStrength } from "@/lib/ratings/rotation-strength"
 import { PLAYER_POSITIONS, type PlayerPosition } from "@/lib/ratings/types"
 import { MAX_CANDIDATES, MAX_COMPUTATION_TIME_MS } from "./constants"
 import { ACTIVE_SLOTS_PER_POSITION, getActivePlayersPerTeamLimit, MAX_ACTIVE_PLAYERS_PER_TEAM, TEAM_NUMBERS } from "./rules"
@@ -21,9 +21,7 @@ function makeGroup(id: number, team: 1 | 2, position: PlayerPosition, members: M
   const ratings = members.map((member) => member.ratings[position])
   const activeSlotCount: 1 | 2 = startIndexes.size > 1 ? 2 : 1
   const activePairRatings = type === "triple" && activeSlotCount > 1 ? ratings.map((rating, index) => (rating + ratings[(index + 1) % ratings.length]) / 2) : undefined
-  const averageMemberRating = Math.round(average(ratings))
-  const substituteCount = Math.max(0, members.length - activeSlotCount)
-  const effectiveRating = Math.round(averageMemberRating + substituteCount * ROTATION_BONUS_PER_SUBSTITUTE)
+  const { averageMemberRating, effectiveRating } = calculateRotationStrength(ratings, activeSlotCount)
   return {
     id, team, position, type, activeSlotCount,
     members: members.map((member, index) => ({ signupId: member.signupId, playerId: member.playerId, name: member.name, rating: member.ratings[position], rotationOrder: index + 1, startsInWater: startIndexes.has(index) })),
@@ -98,7 +96,7 @@ export function summarize(playersBySignup: Map<number, MatchmakingPlayer>, assig
   const subs = mine.filter((a) => !a.startsInWater)
   const avg = (items: MatchmakingAssignment[]) => items.reduce((sum, a) => sum + playersBySignup.get(a.signupId)!.ratings[a.position], 0) / Math.max(1, items.length)
   const averageParticipantRating = Math.round(avg(mine))
-  const rotationBonus = rotationGroups.filter((group) => group.team === team).reduce((sum, group) => sum + Math.max(0, group.members.length - 1) * ROTATION_BONUS_PER_SUBSTITUTE, 0)
+  const rotationBonus = rotationGroups.filter((group) => group.team === team).reduce((sum, group) => sum + Math.max(0, group.effectiveRating - Math.max(...group.members.map((member) => member.rating))), 0)
   return {
     activeCount: active.length,
     substituteCount: subs.length,
@@ -118,7 +116,8 @@ export function normalizeMatchmakingPlayers(input: MatchmakingPlayer[], warnings
 }
 
 export function balanceMatchmakingPlayers(input: MatchmakingPlayer[], options: Partial<GeneticOptions> = {}): MatchmakingResult {
-  const started = Date.now()
+  const now = options.now ?? Date.now
+  const started = now()
   const warnings: string[] = []
   if (input.length < 6) warnings.push("Weniger als sechs Spieler sind angemeldet. Die Aufteilung ist nur eingeschränkt aussagekräftig.")
   if (input.length % 2 === 1) warnings.push("Ungerade Teilnehmerzahl: Ein Spieler wird als Wechselspieler eingeplant.")
@@ -144,7 +143,7 @@ export function balanceMatchmakingPlayers(input: MatchmakingPlayer[], options: P
   const unstable = result.assignments.filter((a) => getRatingStatus(bySignup.get(a.signupId)!.gamesPlayed[a.position]) !== "established").length
   const uniqueWarnings = [...new Set(warnings)]
   const quality = uniqueWarnings.length || diff > 80 ? "low" : diff > 25 || unstable > result.assignments.length / 3 ? "medium" : "high"
-  return { ...result, warnings: uniqueWarnings, computationTimeMs: Date.now() - started, optimality: "best-found", quality }
+  return { ...result, warnings: uniqueWarnings, computationTimeMs: now() - started, optimality: "best-found", quality }
 }
 
 async function loadMatchmakingPlayers(trainingId: number) {
