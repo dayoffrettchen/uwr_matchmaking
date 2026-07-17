@@ -5,12 +5,13 @@ import { getRatingConfidence, getRatingStatus } from "@/lib/ratings/confidence"
 import { ROTATION_BONUS_PER_SUBSTITUTE } from "@/lib/ratings/constants"
 import { calculateEffectiveSlotRating, calculateEffectiveTeamStrength as calculateSharedEffectiveTeamStrength, calculateParticipantAverageRating } from "@/lib/ratings/rotation-strength"
 import { PLAYER_POSITIONS, type PlayerPosition } from "@/lib/ratings/types"
-import { MAX_CANDIDATES, MAX_COMPUTATION_TIME_MS } from "./constants"
+import { MATCHMAKING_QUALITY_THRESHOLDS } from "./constants"
 import { ACTIVE_SLOTS_PER_POSITION, getActivePlayersPerTeamLimit, MAX_ACTIVE_PLAYERS_PER_TEAM, TEAM_NUMBERS } from "./rules"
 import { buildPositionSlotGroups, buildRotationSteps } from "./slots"
 export { buildPositionSlotGroups, buildRotationSteps } from "./slots"
 import { getFeasibleLineupTarget } from "./target-lineup"
 import { runGeneticOptimization, type GeneticOptions } from "./genetic"
+import { DEFAULT_MATCHMAKING_SETTINGS } from "./settings"
 import type { DraftAssignment } from "./candidate"
 import type { MatchmakingAssignment, MatchmakingPlayer, MatchmakingResult, RotationGroup, RotationGroupMember, TeamSummary } from "./types"
 
@@ -134,10 +135,10 @@ export function balanceMatchmakingPlayers(input: MatchmakingPlayer[], options: P
   }
   const result = runGeneticOptimization(players, {
     seed: options.seed,
-    maxCandidates: options.maxCandidates ?? MAX_CANDIDATES,
-    maxGenerations: options.maxGenerations ?? 80,
-    maxComputationTimeMs: options.maxComputationTimeMs ?? MAX_COMPUTATION_TIME_MS,
-    populationSize: options.populationSize ?? 48,
+    maxCandidates: options.maxCandidates ?? DEFAULT_MATCHMAKING_SETTINGS.maxCandidates,
+    maxGenerations: options.maxGenerations ?? DEFAULT_MATCHMAKING_SETTINGS.maxGenerations,
+    maxComputationTimeMs: options.maxComputationTimeMs ?? DEFAULT_MATCHMAKING_SETTINGS.maxComputationTimeMs,
+    populationSize: options.populationSize ?? DEFAULT_MATCHMAKING_SETTINGS.populationSize,
     now,
   }, warnings)
   for (const team of [1, 2] as const) if (result.assignments.filter((a) => a.team === team && a.startsInWater).length > MAX_ACTIVE_PLAYERS_PER_TEAM) warnings.push("Mehr als sechs Spieler wurden als aktiv eingeplant.")
@@ -146,7 +147,7 @@ export function balanceMatchmakingPlayers(input: MatchmakingPlayer[], options: P
   const bySignup = new Map(players.map((p) => [p.signupId, p]))
   const unstable = result.assignments.filter((a) => getRatingStatus(bySignup.get(a.signupId)!.gamesPlayed[a.position]) !== "established").length
   const uniqueWarnings = [...new Set(warnings)]
-  const quality = uniqueWarnings.length || diff > 80 ? "low" : diff > 25 || unstable > result.assignments.length / 3 ? "medium" : "high"
+  const quality = uniqueWarnings.length || diff > MATCHMAKING_QUALITY_THRESHOLDS.lowAboveStrengthDifference ? "low" : diff > MATCHMAKING_QUALITY_THRESHOLDS.highMaximumStrengthDifference || unstable > result.assignments.length * MATCHMAKING_QUALITY_THRESHOLDS.maximumUnstableFraction ? "medium" : "high"
   return { ...result, warnings: uniqueWarnings, computationTimeMs: now() - started, optimality: "best-found", quality }
 }
 

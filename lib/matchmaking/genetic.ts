@@ -4,6 +4,7 @@ import { candidateHash, canonicalizePlayers, fromDraftAssignments, stableInputSe
 import { createPrng, type RandomSource } from "./random"
 import { repairCandidate } from "./repair"
 import { compareBreakdowns, compareFitnessQuality, evaluateCandidate, type EvaluatedCandidate } from "./fitness"
+import { GENETIC_TIME_SHARE, MAX_OPTIONAL_LOCAL_CANDIDATES, OPTIONAL_LOCAL_CANDIDATE_SHARE } from "./constants"
 import type { MatchmakingPlayer, MatchmakingResult } from "./types"
 
 export type GeneticOptions = { seed?: number; maxCandidates: number; maxGenerations: number; maxComputationTimeMs: number; populationSize: number; now?: () => number }
@@ -19,7 +20,7 @@ export function runGeneticOptimization(input: MatchmakingPlayer[], options: Gene
   const budgetPlan = planSearchBudgets(players.length, maxCandidates)
   const { geneticCandidateBudget } = budgetPlan
   const globalDeadline = options.maxComputationTimeMs > 0 ? started + options.maxComputationTimeMs : null
-  const geneticDeadline = globalDeadline === null ? null : started + Math.floor(options.maxComputationTimeMs * 0.7)
+  const geneticDeadline = globalDeadline === null ? null : started + Math.floor(options.maxComputationTimeMs * GENETIC_TIME_SHARE)
   let geneticEvaluated = 0
   let mandatoryEvaluated = 0
   let optionalEvaluated = 0
@@ -103,7 +104,7 @@ export function planSearchBudgets(playerCount: number, maxCandidates: number): S
   if (normalizedMax === 0) return { maxCandidates: 0, geneticCandidateBudget: 1, mandatoryFirstSweepReserve: 0, optionalLocalReserve: 0 }
   const minimumGeneticBudget = normalizedMax > 1 ? 2 : 1
   const mandatoryUpperBound = Math.floor((playerCount * playerCount) / 4)
-  const desiredOptionalReserve = normalizedMax >= 100 ? Math.min(64, Math.floor(normalizedMax * 0.1)) : 0
+  const desiredOptionalReserve = normalizedMax >= 100 ? Math.min(MAX_OPTIONAL_LOCAL_CANDIDATES, Math.floor(normalizedMax * OPTIONAL_LOCAL_CANDIDATE_SHARE)) : 0
   const optionalLocalReserve = Math.min(desiredOptionalReserve, Math.max(0, normalizedMax - minimumGeneticBudget - mandatoryUpperBound))
   const mandatoryFirstSweepReserve = Math.min(mandatoryUpperBound, Math.max(0, normalizedMax - minimumGeneticBudget - optionalLocalReserve))
   const geneticCandidateBudget = normalizedMax - mandatoryFirstSweepReserve - optionalLocalReserve
