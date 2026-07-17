@@ -9,11 +9,13 @@ const labels = {
     players: "Spieler",
     results: "Spiele",
     profile: "Mein Profil",
+    help: "Hilfe",
   },
   en: {
     players: "Players",
     results: "Games",
     profile: "My Profile",
+    help: "Help",
   },
 } satisfies Record<Locale, Record<string, string>>
 
@@ -24,6 +26,7 @@ export function AppNavigation({ role = "player", locale = "de" }: { role?: AppRo
     { href: "/spieler", label: t.players },
     { href: "/ergebnisse", label: t.results },
     { href: "/ranking", label: "Ranking" },
+    { href: "/hilfe", label: t.help },
     { href: "/einstellungen", label: "Einstellungen" },
     { href: "/profil", label: t.profile },
   ]
@@ -31,6 +34,7 @@ export function AppNavigation({ role = "player", locale = "de" }: { role?: AppRo
     { href: "/", label: "Training" },
     { href: "/profil", label: t.profile },
     { href: "/ergebnisse", label: t.results },
+    { href: "/hilfe", label: t.help },
   ]
   const items = role === "organizer" ? organizerItems : playerItems
 
