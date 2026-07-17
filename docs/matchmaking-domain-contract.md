@@ -12,7 +12,7 @@ Each of those six active places is an independent rotation slot. A populated slo
 
 ## Starter and substitute semantics
 
-The first member of a populated slot starts in the water unless a future domain API explicitly exposes another deterministic starter. The remaining members are substitutes. A player may not be the starter in more than one slot, and every assigned player belongs to exactly one final slot. Final slot group types are `single` for one member, `pair` for two members, and `position` for three or more members. Effective slot strength is the rounded average member rating plus one `ROTATION_BONUS_PER_SUBSTITUTE` for each substitute, so one member receives no bonus and three members receive two substitute bonuses.
+The first member of a populated slot starts in the water unless a future domain API explicitly exposes another deterministic starter. The remaining members are substitutes. A player may not be the starter in more than one slot, and every assigned player belongs to exactly one final slot. Final slot group types are `single` for one member, `pair` for two members, and `position` for three or more members. Effective slot strength is calculated by the shared rotation-strength helper: one-member slots use that member rating unchanged; larger slots weight the strongest member at 60%, the average of all remaining members at 40%, and then add one `ROTATION_BONUS_PER_SUBSTITUTE` for each substitute.
 
 For slot sizes one through five, the intended rotation is a deterministic closed cycle through the slot members. A one-player slot emits no rotation steps. Larger slots emit transitions from each member to the next member and back to the starter.
 

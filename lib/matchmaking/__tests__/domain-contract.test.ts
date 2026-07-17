@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest"
+import { calculateEffectiveSlotRating } from "@/lib/ratings/rotation-strength"
 import { PLAYER_POSITIONS } from "@/lib/ratings/types"
 import { balanceMatchmakingPlayers, buildRotationSteps } from "../balance-teams"
 import { getFeasibleLineupTarget, getNominalLineupTarget, getTargetLineup, isLineupTargetDistinctlyMatchable, targetTotal } from "../target-lineup"
@@ -235,7 +236,7 @@ describe("matchmaking domain contract: final 2/2/2 slot model", () => {
 
 
 describe("matchmaking domain contract: final group semantics", () => {
-  it("materializes one-, two-, and three-member final slots with per-substitute effective rating", () => {
+  it("materializes one-, two-, and three-member final slots with shared-helper effective rating", () => {
     const players = [
       ...Array.from({ length: 5 }, (_, index) => player({ id: index + 1, eligible: ["goalkeeper"], rating: 1000 })),
       player({ id: 100, eligible: ["forward"], rating: 1000 }),
@@ -251,7 +252,7 @@ describe("matchmaking domain contract: final group semantics", () => {
       expect(group.type).toBe(size === 1 ? "single" : size === 2 ? "pair" : "position")
       expect(group.members.filter((member) => member.startsInWater)).toHaveLength(1)
       expect(group.activeSlotCount).toBe(1)
-      expect(group.effectiveRating).toBe(Math.max(...group.members.map((member) => member.rating)) + (size - 1) * 30)
+      expect(group.effectiveRating).toBe(calculateEffectiveSlotRating({ members: group.members.map((member) => ({ rating: member.rating, startsInWater: member.startsInWater })) }))
       expectValidClosedRotationCycle(group)
     }
   })
