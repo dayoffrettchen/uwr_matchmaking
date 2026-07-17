@@ -251,7 +251,7 @@ describe("matchmaking domain contract: final group semantics", () => {
       expect(group.type).toBe(size === 1 ? "single" : size === 2 ? "pair" : "position")
       expect(group.members.filter((member) => member.startsInWater)).toHaveLength(1)
       expect(group.activeSlotCount).toBe(1)
-      expect(group.effectiveRating).toBe(group.averageMemberRating + (size - 1) * 30)
+      expect(group.effectiveRating).toBe(Math.max(...group.members.map((member) => member.rating)) + (size - 1) * 30)
       expectValidClosedRotationCycle(group)
     }
   })

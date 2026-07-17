@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { summarizePersistedLineupStrength } from "@/lib/matchmaking/persisted-lineup-strength"
 import { POSITION_LABELS, PLAYER_POSITIONS, type PlayerPosition } from "@/lib/ratings/types"
 import { GripVertical, Shuffle, Users, X } from "lucide-react"
 import type { Locale } from "@/lib/i18n"
@@ -198,10 +199,11 @@ function TeamColumn({
   onPositionDragLeave: () => void
   onPositionDrop: (event: DragEvent<HTMLDivElement>, position: PlayerPosition) => void
 }) {
+  const strength = summarizePersistedLineupStrength(players).teams[variant === "primary" ? 1 : 2]
   const active = players.filter((p) => p.startsInWater ?? p.lineupType !== "substitute").length
   const subs = players.length - active
-  const ratedPlayers = players.filter((p) => typeof p.assignedRating === "number")
-  const averageRating = ratedPlayers.length > 0 ? Math.round(ratedPlayers.reduce((sum, player) => sum + player.assignedRating!, 0) / ratedPlayers.length) : null
+  const averageRating = strength.participantAverageRating
+  const effectiveRating = strength.effectiveStrength
 
   const columnClassName = "min-w-0 overflow-hidden rounded-lg border bg-card transition-colors"
   const headerClassName = variant === "primary"
@@ -214,7 +216,8 @@ function TeamColumn({
         <span className="whitespace-nowrap text-lg font-semibold leading-tight">{label}</span>
         <div className="flex flex-wrap gap-2 sm:justify-end">
           <Badge variant="secondary" className="whitespace-nowrap bg-card text-card-foreground">{active} im Wasser · {subs} draußen</Badge>
-          {averageRating !== null && <Badge variant="secondary" className="whitespace-nowrap bg-card text-card-foreground">Ø MMR {averageRating}</Badge>}
+          {effectiveRating !== null && <Badge variant="secondary" className="whitespace-nowrap bg-card text-card-foreground">Eff. MMR {effectiveRating}</Badge>}
+          {averageRating !== null && <Badge variant="secondary" className="whitespace-nowrap bg-card text-card-foreground">Ø Spieler-MMR {averageRating}</Badge>}
         </div>
       </div>
       <div className="grid gap-3 p-3">
