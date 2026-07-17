@@ -8,6 +8,24 @@ export const MISSING_ACTIVE_SLOT_PENALTY = 1_000_000
 export const INVALID_ROTATION_GROUP_PENALTY = 1_000_000
 export const INVALID_STARTING_COUNT_PENALTY = 1_000_000
 
+export const POSITION_PREFERENCE_PENALTIES = {
+  main: 0,
+  secondaryRank2: 40,
+  secondaryRank3: 120,
+  eligibleUnranked: 180,
+  ineligible: 1_000_000,
+} as const
+
+export const MATCHMAKING_QUALITY_THRESHOLDS = {
+  highMaximumStrengthDifference: 25,
+  lowAboveStrengthDifference: 80,
+  maximumUnstableFraction: 1 / 3,
+} as const
+
+export const GENETIC_TIME_SHARE = 0.7
+export const OPTIONAL_LOCAL_CANDIDATE_SHARE = 0.1
+export const MAX_OPTIONAL_LOCAL_CANDIDATES = 64
+
 export const TEAM_EFFECTIVE_STRENGTH_WEIGHT = 100
 export const STARTING_LINEUP_STRENGTH_WEIGHT = 8
 export const POSITION_STRENGTH_WEIGHT = 6

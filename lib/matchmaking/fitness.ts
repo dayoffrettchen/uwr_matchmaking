@@ -1,6 +1,6 @@
 import { getRatingStatus } from "@/lib/ratings/confidence"
 import { PLAYER_POSITIONS, type PlayerPosition } from "@/lib/ratings/types"
-import { OBJECTIVE_WEIGHTS } from "./constants"
+import { OBJECTIVE_WEIGHTS, POSITION_PREFERENCE_PENALTIES } from "./constants"
 import { getActivePlayersPerTeamLimit, MAX_ACTIVE_PLAYERS_PER_TEAM } from "./rules"
 import { completeAssignments, summarize } from "./balance-teams"
 import { getFeasibleLineupTarget } from "./target-lineup"
@@ -27,13 +27,13 @@ export type FitnessBreakdown = {
 export type EvaluatedCandidate = MatchmakingResult & { fitness: FitnessBreakdown; candidate: Candidate; hash: string }
 
 export function getPositionPenalty(player: MatchmakingPlayer, position: PlayerPosition): number {
-  if (!player.eligiblePositions.includes(position)) return 1_000_000
+  if (!player.eligiblePositions.includes(position)) return POSITION_PREFERENCE_PENALTIES.ineligible
   const pref = player.positionPreferences.find((entry) => entry.position === position)
-  if (!pref) return 180
-  if (pref.order === 1) return 0
-  if (pref.order === 2) return 40
-  if (pref.order === 3) return 120
-  return 180
+  if (!pref) return POSITION_PREFERENCE_PENALTIES.eligibleUnranked
+  if (pref.order === 1) return POSITION_PREFERENCE_PENALTIES.main
+  if (pref.order === 2) return POSITION_PREFERENCE_PENALTIES.secondaryRank2
+  if (pref.order === 3) return POSITION_PREFERENCE_PENALTIES.secondaryRank3
+  return POSITION_PREFERENCE_PENALTIES.eligibleUnranked
 }
 
 function positionEffective(groups: RotationGroup[], position: PlayerPosition): number {

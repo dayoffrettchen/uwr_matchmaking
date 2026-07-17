@@ -3,6 +3,7 @@ import { AppNavigation } from "@/components/app-navigation"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { getSessionUser } from "@/lib/auth/server"
 import { getLocale } from "@/lib/i18n-server"
+import { buildMatchmakingHelpTables, MATCHMAKING_PRIORITY_ORDER, type HelpTable } from "@/lib/matchmaking/help-tables"
 
 export const dynamic = "force-dynamic"
 
@@ -11,6 +12,10 @@ const content = {
     title: "Hilfe: faire Einteilung",
     intro: "So teilt UWR Matchmaking die angemeldeten Spielerinnen und Spieler in zwei möglichst faire Trainings-Teams ein.",
     sectionDescription: "Regeln und Bewertung der automatischen Team-Einteilung.",
+    numbersTitle: "Zahlen und Formeln auf einen Blick",
+    numbersDescription: "Diese Werte werden bei der automatischen Einteilung verwendet. MMR-Werte, interne Präferenzpunkte und technische Suchgrenzen sind getrennt dargestellt.",
+    priorityIntro: "Der Optimierer vergleicht Aufstellungen in dieser Reihenfolge; interne Diagnosegewichte werden hier bewusst nicht als MMR oder einfache Endpunktzahl dargestellt:",
+    eloNote: "Die spätere Änderung der persönlichen MMR nach einem eingetragenen Spielergebnis verwendet eine separate Berechnung und ist nicht Bestandteil dieser Einteilungsformeln.",
     sections: [
       { title: "1. Wer wird eingeteilt?", items: ["Alle Anmeldungen für das Training werden genau einmal berücksichtigt.", "Ein Profil gibt vor, welche Positionen eine Person spielen darf: Torwart, Verteidiger und/oder Stürmer.", "Wenn ausnahmsweise keine Position freigeschaltet ist, kann die Person nur provisorisch auf allen Positionen eingeplant werden; die Einteilung zeigt dann eine Warnung."] },
       { title: "2. Ziel-Aufstellung im Wasser", items: ["Ein komplettes aktives Team besteht aus sechs Personen: zwei Torwarte, zwei Verteidiger und zwei Stürmer.", "Diese sechs Plätze sind eigenständige Wechsel-Slots. Jede besetzte Gruppe hat genau eine startende Person im Wasser.", "Bei weniger Anmeldungen oder fehlenden Positionsfreigaben wählt das System die beste machbare Zielverteilung, ohne Personen auf unzulässige Positionen zu setzen."] },
@@ -23,6 +28,10 @@ const content = {
     title: "Help: fair assignment",
     intro: "How UWR Matchmaking assigns signed-up players to two training teams as fairly as possible.",
     sectionDescription: "Rules and scoring of the automatic team assignment.",
+    numbersTitle: "Numbers and formulas at a glance",
+    numbersDescription: "These values are used by automatic assignment. MMR values, internal preference points and technical search limits are shown separately.",
+    priorityIntro: "The optimizer compares lineups in this order; internal diagnostic weights are intentionally not shown as MMR or a simple final score:",
+    eloNote: "The later change to personal MMR after a recorded match result uses a separate calculation and is not part of these assignment formulas.",
     sections: [
       { title: "1. Who is assigned?", items: ["Every signup is used exactly once.", "Profiles define eligible positions: goalkeeper, defender and/or forward.", "If no position is enabled, the player can only be assigned provisionally and the result shows a warning."] },
       { title: "2. Target lineup in the water", items: ["A complete active team has six players: two goalkeepers, two defenders and two forwards.", "Those six places are independent rotation slots. Every populated group has exactly one starter in the water.", "With fewer signups or limited eligibility, the system chooses the best feasible target without using ineligible positions."] },
@@ -33,11 +42,41 @@ const content = {
   },
 }
 
+function NumbersTable({ table }: { table: HelpTable }) {
+  const hasMeaning = table.headings.length === 3
+  return (
+    <section className="space-y-3">
+      <h3 className="text-base font-semibold">{table.title}</h3>
+      {table.note && <p className="rounded-md border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">{table.note}</p>}
+      <div className="overflow-x-auto rounded-lg border">
+        <table className="w-full min-w-[42rem] border-collapse text-sm">
+          <thead className="bg-muted/50 text-left">
+            <tr>
+              {table.headings.map((heading) => <th key={heading} scope="col" className="px-3 py-2 font-semibold text-foreground">{heading}</th>)}
+            </tr>
+          </thead>
+          <tbody className="divide-y">
+            {table.rows.map((row) => (
+              <tr key={row.label} className="align-top">
+                <th scope="row" className="px-3 py-2 text-left font-medium text-foreground">{row.label}</th>
+                <td className="px-3 py-2 text-muted-foreground">{row.valueIsFormula ? <code className="rounded bg-muted px-1 py-0.5 text-foreground">{row.value}</code> : row.value}</td>
+                {hasMeaning && <td className="px-3 py-2 text-muted-foreground">{row.meaning}</td>}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {table.after && <p className="text-sm leading-6 text-muted-foreground">{table.after}</p>}
+    </section>
+  )
+}
+
 export default async function HelpPage() {
   const locale = await getLocale()
   const user = await getSessionUser()
   if (!user) redirect("/sign-in")
   const t = content[locale]
+  const tables = buildMatchmakingHelpTables(locale)
 
   return (
     <main className="mx-auto flex min-h-screen max-w-5xl flex-col gap-6 px-4 py-8">
@@ -46,6 +85,22 @@ export default async function HelpPage() {
         <h1 className="text-2xl font-bold">{t.title}</h1>
         <p className="text-muted-foreground">{t.intro}</p>
       </div>
+      <Card className="border-primary/30">
+        <CardHeader>
+          <CardTitle>{t.numbersTitle}</CardTitle>
+          <CardDescription>{t.numbersDescription}</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          {tables.map((table) => <NumbersTable key={table.id} table={table} />)}
+          <div className="space-y-2 rounded-lg border bg-muted/30 p-4">
+            <p className="text-sm font-medium">{t.priorityIntro}</p>
+            <ol className="grid list-decimal gap-1 pl-5 text-sm leading-6 text-muted-foreground sm:grid-cols-2">
+              {MATCHMAKING_PRIORITY_ORDER[locale].map((item) => <li key={item}>{item}</li>)}
+            </ol>
+            <p className="pt-2 text-sm leading-6 text-muted-foreground">{t.eloNote}</p>
+          </div>
+        </CardContent>
+      </Card>
       <div className="grid gap-4">
         {t.sections.map((section) => (
           <Card key={section.title}>
