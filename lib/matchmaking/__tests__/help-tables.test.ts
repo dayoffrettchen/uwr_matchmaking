@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { ROTATION_BONUS_PER_SUBSTITUTE } from "@/lib/ratings/constants"
+import { PRIMARY_ROTATION_PLAYER_SHARE, ROTATION_BONUS_PER_SUBSTITUTE, SUBSTITUTE_ROTATION_GROUP_SHARE } from "@/lib/ratings/constants"
 import { ACTIVE_SLOTS_PER_POSITION, MAX_ACTIVE_PLAYERS_PER_TEAM } from "../rules"
 import { DEFAULT_MATCHMAKING_SETTINGS } from "../settings"
 import { MATCHMAKING_QUALITY_THRESHOLDS, POSITION_PREFERENCE_PENALTIES } from "../constants"
@@ -20,6 +20,30 @@ describe("matchmaking help table data", () => {
   it("shows the production substitute bonus", () => {
     expect(row("de", "lineup", "Wechselspieler-Bonus").numericValues).toContain(ROTATION_BONUS_PER_SUBSTITUTE)
     expect(row("en", "lineup", "Substitute bonus").numericValues).toContain(ROTATION_BONUS_PER_SUBSTITUTE)
+  })
+
+
+  it("documents the 60/40 slot formula and weak-substitute behavior consistently", () => {
+    const de = row("de", "lineup", "Effektive Slot-MMR")
+    const en = row("en", "lineup", "Effective slot MMR")
+    expect(de.numericValues).toEqual([PRIMARY_ROTATION_PLAYER_SHARE, SUBSTITUTE_ROTATION_GROUP_SHARE, ROTATION_BONUS_PER_SUBSTITUTE])
+    expect(en.numericValues).toEqual(de.numericValues)
+    expect(de.value).toContain("60 %")
+    expect(de.value).toContain("40 %")
+    expect(en.value).toContain("60%")
+    expect(en.value).toContain("40%")
+    expect(`${de.meaning} ${en.meaning}`.includes("senken") || `${de.meaning} ${en.meaning}`.includes("reduce")).toBe(true)
+    expect(`${de.value} ${de.meaning} ${en.value} ${en.meaning}`.toLowerCase().includes("monotonic")).toBe(false)
+    expect(`${de.meaning} ${en.meaning}`.includes(`nicht schwächer ${"machen"}`) || `${de.meaning} ${en.meaning}`.includes(`cannot make the slot ${"weaker"}`)).toBe(false)
+  })
+
+  it("shows substitute clarifications and the 1267 plus 1012 example", () => {
+    expect(row("de", "lineup", "Slot ohne Wechselspieler").value).toBe("Positions-MMR des einzigen Spielers")
+    expect(row("en", "lineup", "Slot without substitutes").value).toBe("The only player's position MMR")
+    expect(row("de", "lineup", "Mehrere Wechselspieler").numericValues).toEqual([SUBSTITUTE_ROTATION_GROUP_SHARE, ROTATION_BONUS_PER_SUBSTITUTE])
+    expect(row("en", "lineup", "Several substitutes").numericValues).toEqual([SUBSTITUTE_ROTATION_GROUP_SHARE, ROTATION_BONUS_PER_SUBSTITUTE])
+    expect(row("de", "lineup", "Beispiel: 1267 und 1012").numericValues).toContain(1195)
+    expect(row("en", "lineup", "Example: 1267 and 1012").value).toContain("1195 effective MMR")
   })
 
   it("shows the 2/2/2 target lineup and maximum active count", () => {
