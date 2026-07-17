@@ -60,3 +60,44 @@ describe("optimizer consolidation", () => {
     }
   })
 })
+
+describe("search budget guarantees", () => {
+  function flexible(id: number): MatchmakingPlayer {
+    return { signupId: id, playerId: id, name: `F${id}`, eligiblePositions: [...PLAYER_POSITIONS], positionPreferences: PLAYER_POSITIONS.map((position, index) => ({ position, order: index + 1 })), ratings: Object.fromEntries(PLAYER_POSITIONS.map((position, index) => [position, 900 + ((id * 37 + index * 53) % 350)])) as Record<PlayerPosition, number>, gamesPlayed: Object.fromEntries(PLAYER_POSITIONS.map((position) => [position, 20])) as Record<PlayerPosition, number>, confidence: Object.fromEntries(PLAYER_POSITIONS.map((position) => [position, 1])) as Record<PlayerPosition, number> }
+  }
+
+  it("reserves enough capacity for a 30-player mandatory first sweep", () => {
+    const players = Array.from({ length: 30 }, (_, index) => flexible(index + 1))
+    const result = balanceMatchmakingPlayers(players, { seed: 100, maxCandidates: 500, maxGenerations: 20, maxComputationTimeMs: 0, populationSize: 24 })
+    const diagnostics = result.diagnostics!
+    expect(diagnostics.totalCandidates).toBeLessThanOrEqual(500)
+    expect(diagnostics.totalCandidates).toBe(result.candidatesEvaluated)
+    expect(diagnostics.geneticCandidates).toBeGreaterThan(1)
+    expect(diagnostics.mandatorySamePositionFirstSweepRequiredCandidates).toBeLessThanOrEqual(225)
+    expect(diagnostics.mandatorySamePositionReservedCandidates).toBeGreaterThanOrEqual(diagnostics.mandatorySamePositionFirstSweepRequiredCandidates)
+    expect(diagnostics.mandatorySamePositionSweepsCompleted).toBeGreaterThanOrEqual(1)
+    expect(diagnostics.geneticCandidates + diagnostics.mandatorySamePositionCandidates + diagnostics.optionalLocalCandidates).toBe(diagnostics.totalCandidates)
+  })
+
+  it("preserves minimum genetic budget and reports partial mandatory search with tiny limits", () => {
+    const players = Array.from({ length: 30 }, (_, index) => flexible(index + 1))
+    const result = balanceMatchmakingPlayers(players, { seed: 101, maxCandidates: 20, maxGenerations: 20, maxComputationTimeMs: 0, populationSize: 24 })
+    const diagnostics = result.diagnostics!
+    expect(diagnostics.totalCandidates).toBeLessThanOrEqual(20)
+    expect(diagnostics.geneticCandidateBudget).toBeGreaterThanOrEqual(2)
+    expect(diagnostics.geneticCandidates).toBeGreaterThanOrEqual(2)
+    expect(diagnostics.mandatorySamePositionCompleted).toBe(false)
+    expect(diagnostics.mandatorySamePositionCandidates).toBeLessThan(diagnostics.mandatorySamePositionRequiredCandidates)
+  })
+
+  it("uses injected deadlines so mandatory search can run after the genetic cutoff", () => {
+    let tick = 0
+    const players = Array.from({ length: 12 }, (_, index) => flexible(index + 1))
+    const result = balanceMatchmakingPlayers(players, { seed: 3, maxCandidates: 200, maxGenerations: 100, maxComputationTimeMs: 100, populationSize: 30, now: () => tick++ })
+    const diagnostics = result.diagnostics!
+    expect(result.computationTimeMs).toBeGreaterThanOrEqual(100)
+    expect(diagnostics.geneticCandidates).toBeLessThan(diagnostics.geneticCandidateBudget)
+    expect(diagnostics.mandatorySamePositionCandidates + diagnostics.optionalLocalCandidates).toBeGreaterThan(0)
+    expect(diagnostics.totalCandidates).toBeLessThanOrEqual(200)
+  })
+})

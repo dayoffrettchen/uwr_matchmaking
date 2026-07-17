@@ -10,7 +10,35 @@ function codes(rows: PersistedLineupStrengthRow[]) {
   return summarizePersistedLineupStrength(rows).teams[1].diagnostics.map((diagnostic) => diagnostic.code)
 }
 
+function validPair(): PersistedLineupStrengthRow[] {
+  return [row({ signupId: 1, startsInWater: true, rotationOrder: 1 }), row({ signupId: 2, startsInWater: false, rotationOrder: 2 })]
+}
+
 describe("strict persisted lineup validation", () => {
+  it("rejects null and invalid teams globally", () => {
+    for (const team of [null, 0, 3] as const) {
+      const summary = summarizePersistedLineupStrength([...validPair(), row({ signupId: 99, team })])
+      expect(summary.diagnostics.map((diagnostic) => diagnostic.code)).toContain("INVALID_TEAM")
+      expect(summary.teams[1].effectiveStrength).toBe(null)
+      expect(summary.teams[2].effectiveStrength).toBe(null)
+      expect(summary.strengthDifference).toBe(null)
+    }
+  })
+
+  it("rejects mixed-position groups before creating slots", () => {
+    const summary = summarizePersistedLineupStrength([row({ signupId: 1, position: "goalkeeper", rotationGroupId: 7 }), row({ signupId: 2, position: "defender", rotationGroupId: 7, startsInWater: false, rotationOrder: 2 })])
+    expect(summary.teams[1].diagnostics.map((diagnostic) => diagnostic.code)).toContain("MIXED_POSITION_GROUP")
+    expect(summary.teams[1].effectiveStrength).toBe(null)
+    expect(summary.teams[1].slots).toHaveLength(0)
+  })
+
+  it("allows the same group id on different teams", () => {
+    const summary = summarizePersistedLineupStrength([row({ signupId: 1, team: 1, rotationGroupId: 1 }), row({ signupId: 2, team: 2, rotationGroupId: 1 })])
+    expect(summary.diagnostics).toHaveLength(0)
+    expect(summary.teams[1].complete).toBe(true)
+    expect(summary.teams[2].complete).toBe(true)
+  })
+
   it("rejects malformed rotation group ids", () => {
     expect(codes([row({ rotationGroupId: 0 })])).toContain("INVALID_GROUP_ID")
     expect(codes([row({ rotationGroupId: -1 })])).toContain("INVALID_GROUP_ID")
