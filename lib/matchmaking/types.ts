@@ -69,6 +69,12 @@ export type MatchmakingDiagnostics = {
   startingLineupDifference: number
   positionStrengthDifference: number
   targetLineupPenalty: number
+  /** Planned successful candidate evaluations reserved for the genetic phase. */
+  geneticCandidateBudget: number
+  /** Planned reserve for the exact first same-position cross-team mandatory sweep. */
+  mandatorySamePositionReservedCandidates: number
+  /** Planned reserve for optional local search after minimum genetic and mandatory reserves. */
+  optionalLocalReservedCandidates: number
   geneticCandidates: number
   mandatorySamePositionCandidates: number
   mandatorySamePositionFirstSweepRequiredCandidates: number
