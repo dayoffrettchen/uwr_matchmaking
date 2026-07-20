@@ -121,6 +121,44 @@ async function getSessionDataCookieUser(): Promise<NeonSessionCookiePayload["use
   }
 }
 
+function isMissingColumnError(error: unknown, columnName: string): boolean {
+  if (!(error instanceof Error) || !("cause" in error)) {
+    return false
+  }
+
+  const cause = error.cause
+
+  if (typeof cause !== "object" || cause === null || !("code" in cause) || cause.code !== "42703") {
+    return false
+  }
+
+  const quotedColumn = `"${columnName}"`
+
+  return (
+    ("column" in cause && cause.column === columnName) ||
+    error.message.includes(quotedColumn) ||
+    ("message" in cause && typeof cause.message === "string" && cause.message.includes(quotedColumn))
+  )
+}
+
+async function playerHasOrganizerFlag(userId: string, normalizedEmail: string | null): Promise<boolean> {
+  try {
+    const [storedPlayer] = await db
+      .select({ isOrganizer: players.isOrganizer })
+      .from(players)
+      .where(normalizedEmail ? or(eq(players.authUserId, userId), eq(players.email, normalizedEmail)) : eq(players.authUserId, userId))
+      .limit(1)
+
+    return storedPlayer?.isOrganizer ?? false
+  } catch (error) {
+    if (isMissingColumnError(error, "is_organizer")) {
+      return false
+    }
+
+    throw error
+  }
+}
+
 async function toSessionUser(sessionUser: NonNullable<NeonSessionCookiePayload["user"]>): Promise<SessionUser | null> {
   if (typeof sessionUser.id !== "string") {
     return null
@@ -128,15 +166,11 @@ async function toSessionUser(sessionUser: NonNullable<NeonSessionCookiePayload["
 
   const email = typeof sessionUser.email === "string" ? sessionUser.email : null
   const normalizedEmail = email?.toLowerCase() ?? null
-  const [storedPlayer] = await db
-    .select({ isOrganizer: players.isOrganizer })
-    .from(players)
-    .where(normalizedEmail ? or(eq(players.authUserId, sessionUser.id), eq(players.email, normalizedEmail)) : eq(players.authUserId, sessionUser.id))
-    .limit(1)
-  const role: AppRole =
-    (normalizedEmail && organizerEmails().includes(normalizedEmail)) || storedPlayer?.isOrganizer
-      ? "organizer"
-      : "player"
+  const isConfiguredOrganizer = normalizedEmail ? organizerEmails().includes(normalizedEmail) : false
+  const hasOrganizerFlag = isConfiguredOrganizer
+    ? false
+    : await playerHasOrganizerFlag(sessionUser.id, normalizedEmail)
+  const role: AppRole = isConfiguredOrganizer || hasOrganizerFlag ? "organizer" : "player"
 
   return {
     id: sessionUser.id,
