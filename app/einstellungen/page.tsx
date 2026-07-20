@@ -1,15 +1,18 @@
 import { redirect } from "next/navigation"
 import { cookies } from "next/headers"
+import { asc } from "drizzle-orm"
 import { Database, SlidersHorizontal } from "lucide-react"
 import { AppNavigation } from "@/components/app-navigation"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { getSessionUser } from "@/lib/auth/server"
+import { db } from "@/lib/db"
+import { players } from "@/lib/db/schema"
 import { getLocale } from "@/lib/i18n-server"
 import { MATCHMAKING_SETTING_FIELDS, MATCHMAKING_SETTINGS_COOKIE, parseMatchmakingSettingsCookie } from "@/lib/matchmaking/settings"
 import { DELETE_CONFIRMATION } from "@/lib/data-transfer"
-import { deleteAllData, importJsonData, importTestData, saveMatchmakingSettings } from "./actions"
+import { deleteAllData, importJsonData, importTestData, mergePlayerAccounts, saveMatchmakingSettings, updateOrganizerRole } from "./actions"
 
 export const dynamic = "force-dynamic"
 
@@ -21,6 +24,9 @@ export default async function EinstellungenPage() {
   const cookieStore = await cookies()
   const settings = parseMatchmakingSettingsCookie(cookieStore.get(MATCHMAKING_SETTINGS_COOKIE)?.value)
   const canManage = user.role === "organizer"
+  const playerAccounts = canManage
+    ? await db.select({ id: players.id, name: players.name, email: players.email, authUserId: players.authUserId, isOrganizer: players.isOrganizer }).from(players).orderBy(asc(players.name))
+    : []
 
   return (
     <main className="mx-auto flex min-h-screen max-w-5xl flex-col gap-6 px-4 py-8">
@@ -84,6 +90,60 @@ export default async function EinstellungenPage() {
           <form action={importTestData}>
             <Button type="submit" disabled={!canManage}>Testdaten importieren</Button>
           </form>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Organisatoren und Accounts</CardTitle>
+        </CardHeader>
+        <CardContent className="grid gap-6">
+          <section className="space-y-3">
+            <h2 className="font-semibold text-foreground">Organisatoren verwalten</h2>
+            <p className="text-sm text-muted-foreground text-pretty">
+              Aktiviere Organisator-Rechte für angemeldete Spieler. dayoffrettchen@gmail.com bleibt zusätzlich immer als Organisator zugelassen.
+            </p>
+            <div className="grid gap-2">
+              {playerAccounts.map((player) => (
+                <form key={player.id} action={updateOrganizerRole} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-card p-3 text-sm">
+                  <input type="hidden" name="playerId" value={player.id} />
+                  <label className="flex items-center gap-3">
+                    <input name="isOrganizer" type="checkbox" defaultChecked={player.isOrganizer} disabled={!canManage} />
+                    <span>
+                      <span className="block font-medium text-foreground">{player.name}</span>
+                      <span className="text-muted-foreground">{player.email ?? "Kein verknüpftes Login"}</span>
+                    </span>
+                  </label>
+                  <Button type="submit" variant="outline" size="sm" disabled={!canManage}>Speichern</Button>
+                </form>
+              ))}
+              {playerAccounts.length === 0 && <p className="text-sm text-muted-foreground">Keine Spieler vorhanden.</p>}
+            </div>
+          </section>
+
+          <section className="space-y-3 rounded-lg border bg-card p-4">
+            <h2 className="font-semibold text-foreground">Doppelte Spieler zusammenführen</h2>
+            <p className="text-sm text-muted-foreground text-pretty">
+              Verbinde einen neu angemeldeten Account mit einem bereits manuell angelegten Spieler. Anmeldungen, Spiele, Positionen und Ratings werden auf den Ziel-Spieler verschoben; der Quell-Spieler wird gelöscht.
+            </p>
+            <form action={mergePlayerAccounts} className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] md:items-end">
+              <label className="grid gap-2 text-sm font-medium text-foreground">
+                Quelle löschen
+                <select name="sourcePlayerId" className="h-10 rounded-md border bg-background px-3 text-sm" disabled={!canManage} required>
+                  <option value="">Spieler wählen</option>
+                  {playerAccounts.map((player) => <option key={player.id} value={player.id}>{player.name} {player.email ? `(${player.email})` : ""}</option>)}
+                </select>
+              </label>
+              <label className="grid gap-2 text-sm font-medium text-foreground">
+                Ziel behalten
+                <select name="targetPlayerId" className="h-10 rounded-md border bg-background px-3 text-sm" disabled={!canManage} required>
+                  <option value="">Spieler wählen</option>
+                  {playerAccounts.map((player) => <option key={player.id} value={player.id}>{player.name} {player.email ? `(${player.email})` : ""}</option>)}
+                </select>
+              </label>
+              <Button type="submit" disabled={!canManage}>Accounts verbinden</Button>
+            </form>
+          </section>
         </CardContent>
       </Card>
 

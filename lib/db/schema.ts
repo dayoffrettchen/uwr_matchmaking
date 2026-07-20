@@ -16,6 +16,7 @@ export const players = pgTable("players", {
   name: text("name").notNull(),
   phone: text("phone").unique(),
   profileCompleted: boolean("profile_completed").notNull().default(false),
+  isOrganizer: boolean("is_organizer").notNull().default(false),
   notes: text("notes"),
   skillRating: integer("skill_rating").notNull().default(5),
   initialRatingConfigured: boolean("initial_rating_configured").notNull().default(false),

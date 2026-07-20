@@ -8,6 +8,7 @@ const SCHEMA_STATEMENTS = [
   "ALTER TABLE players ADD COLUMN IF NOT EXISTS auth_user_id text",
   "ALTER TABLE players ADD COLUMN IF NOT EXISTS email text",
   "ALTER TABLE players ADD COLUMN IF NOT EXISTS profile_completed boolean NOT NULL DEFAULT false",
+  "ALTER TABLE players ADD COLUMN IF NOT EXISTS is_organizer boolean NOT NULL DEFAULT false",
   "ALTER TABLE players ADD COLUMN IF NOT EXISTS notes text",
   "ALTER TABLE players ADD COLUMN IF NOT EXISTS updated_at timestamptz NOT NULL DEFAULT now()",
   "ALTER TABLE players ADD COLUMN IF NOT EXISTS initial_rating_configured boolean NOT NULL DEFAULT false",
