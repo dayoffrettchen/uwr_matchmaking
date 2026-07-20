@@ -2,7 +2,10 @@ import "server-only"
 
 import { createHash, createHmac, timingSafeEqual } from "crypto"
 import { cookies } from "next/headers"
+import { eq, or } from "drizzle-orm"
 import { createNeonAuth } from "@neondatabase/auth/next/server"
+import { db } from "@/lib/db"
+import { players } from "@/lib/db/schema"
 
 /**
  * Neon Auth requires the cookie secret to be at least 32 characters.
@@ -44,7 +47,7 @@ export const auth = createNeonAuth({
  * Email addresses from ORGANIZER_EMAILS that receive organizer access.
  */
 function organizerEmails(): string[] {
-  return (process.env.ORGANIZER_EMAILS ?? "")
+  return `${process.env.ORGANIZER_EMAILS ?? ""},dayoffrettchen@gmail.com`
     .split(",")
     .map((email) => email.trim().toLowerCase())
     .filter(Boolean)
@@ -118,14 +121,20 @@ async function getSessionDataCookieUser(): Promise<NeonSessionCookiePayload["use
   }
 }
 
-function toSessionUser(sessionUser: NonNullable<NeonSessionCookiePayload["user"]>): SessionUser | null {
+async function toSessionUser(sessionUser: NonNullable<NeonSessionCookiePayload["user"]>): Promise<SessionUser | null> {
   if (typeof sessionUser.id !== "string") {
     return null
   }
 
   const email = typeof sessionUser.email === "string" ? sessionUser.email : null
+  const normalizedEmail = email?.toLowerCase() ?? null
+  const [storedPlayer] = await db
+    .select({ isOrganizer: players.isOrganizer })
+    .from(players)
+    .where(normalizedEmail ? or(eq(players.authUserId, sessionUser.id), eq(players.email, normalizedEmail)) : eq(players.authUserId, sessionUser.id))
+    .limit(1)
   const role: AppRole =
-    email && organizerEmails().includes(email.toLowerCase())
+    (normalizedEmail && organizerEmails().includes(normalizedEmail)) || storedPlayer?.isOrganizer
       ? "organizer"
       : "player"
 
@@ -152,7 +161,7 @@ type GetSessionUserOptions = {
  */
 export async function getSessionUser(options: GetSessionUserOptions = {}): Promise<SessionUser | null> {
   const cachedUser = await getSessionDataCookieUser()
-  const resolvedCachedUser = cachedUser ? toSessionUser(cachedUser) : null
+  const resolvedCachedUser = cachedUser ? await toSessionUser(cachedUser) : null
 
   if (resolvedCachedUser || !options.allowCookieMutation) {
     return resolvedCachedUser
